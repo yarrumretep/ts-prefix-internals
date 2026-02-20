@@ -78,6 +78,7 @@ export function classifySymbols(
   function getSymbolKind(symbol: ts.Symbol): string {
     if (symbol.flags & ts.SymbolFlags.Class) return 'class';
     if (symbol.flags & ts.SymbolFlags.Interface) return 'interface';
+    if (symbol.flags & ts.SymbolFlags.TypeAlias) return 'type-alias';
     if (symbol.flags & ts.SymbolFlags.Enum) return 'enum';
     if (symbol.flags & ts.SymbolFlags.EnumMember) return 'enum-member';
     if (symbol.flags & ts.SymbolFlags.Function) return 'function';
@@ -240,6 +241,66 @@ export function classifySymbols(
     }
   }
 
+  function processTypeNodeMembers(
+    typeNode: ts.TypeNode | undefined,
+    ownerName: string,
+    ownerIsPublic: boolean
+  ): void {
+    if (!typeNode) return;
+
+    if (ts.isTypeLiteralNode(typeNode)) {
+      for (const member of typeNode.members) {
+        const memberSymbol = member.name ? checker.getSymbolAtLocation(member.name) : undefined;
+        if (memberSymbol && !isFromExternalOrDts(memberSymbol)) {
+          const memberName = memberSymbol.getName();
+          const qualifiedName = `${ownerName}.${memberName}`;
+
+          if (ownerIsPublic) {
+            const memberIsPublic = isPublicSymbol(memberSymbol);
+            classifyOne(memberSymbol, qualifiedName, !memberIsPublic, memberIsPublic ? 'public API member' : 'member of public type literal');
+          } else {
+            classifyOne(memberSymbol, qualifiedName, true, 'member of internal type literal');
+          }
+        }
+
+        if (ts.isPropertySignature(member) && member.type) {
+          processTypeNodeMembers(member.type, ownerName, ownerIsPublic);
+        }
+        if (ts.isMethodSignature(member)) {
+          if (member.type) processTypeNodeMembers(member.type, ownerName, ownerIsPublic);
+          for (const param of member.parameters) {
+            if (param.type) processTypeNodeMembers(param.type, ownerName, ownerIsPublic);
+          }
+        }
+      }
+      return;
+    }
+
+    if (ts.isUnionTypeNode(typeNode) || ts.isIntersectionTypeNode(typeNode)) {
+      for (const t of typeNode.types) {
+        processTypeNodeMembers(t, ownerName, ownerIsPublic);
+      }
+      return;
+    }
+
+    if (ts.isParenthesizedTypeNode(typeNode)) {
+      processTypeNodeMembers(typeNode.type, ownerName, ownerIsPublic);
+      return;
+    }
+
+    if (ts.isArrayTypeNode(typeNode)) {
+      processTypeNodeMembers(typeNode.elementType, ownerName, ownerIsPublic);
+      return;
+    }
+
+    if (ts.isTupleTypeNode(typeNode)) {
+      for (const el of typeNode.elements) {
+        processTypeNodeMembers(el, ownerName, ownerIsPublic);
+      }
+      return;
+    }
+  }
+
   function detectDynamicAccess(sf: ts.SourceFile): void {
     function visit(node: ts.Node): void {
       if (ts.isElementAccessExpression(node)) {
@@ -302,6 +363,20 @@ export function classifySymbols(
 
           classifyOne(symbol, name, !isPublic, isPublic ? 'public API' : 'internal enum');
           processEnumMembers(node, symbol, isPublic, name);
+        }
+        return;
+      }
+
+      // Type alias declarations
+      if (ts.isTypeAliasDeclaration(node) && node.name) {
+        const symbol = checker.getSymbolAtLocation(node.name);
+        if (symbol && !isFromExternalOrDts(symbol)) {
+          const resolved = resolveSymbol(symbol);
+          const name = symbol.getName();
+          const isPublic = isPublicSymbol(symbol) || isPublicSymbol(resolved);
+
+          classifyOne(symbol, name, !isPublic, isPublic ? 'public API' : 'internal type alias');
+          processTypeNodeMembers(node.type, name, isPublic);
         }
         return;
       }

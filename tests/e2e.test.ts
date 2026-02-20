@@ -57,6 +57,12 @@ describe('end-to-end', () => {
     // Internal functions
     expect(prefixed.has('makeKey')).toBe(true);
     expect(prefixed.has('splitKey')).toBe(true);
+    expect(prefixed.has('summarizeShape')).toBe(true);
+
+    // Internal type alias + members
+    expect(prefixed.has('InternalShape')).toBe(true);
+    expect(prefixed.has('InternalShape.count')).toBe(true);
+    expect(prefixed.has('InternalShape.label')).toBe(true);
   });
 
   it('does not prefix any public API symbols', () => {
@@ -110,5 +116,13 @@ describe('end-to-end', () => {
     );
     const typesOutput = fs.readFileSync(path.join(outDir, 'src', 'types.ts'), 'utf-8');
     expect(typesOutput).toBe(typesOriginal);
+  });
+
+  it('output aliases.ts prefixes internal type alias members', () => {
+    const aliasesContent = fs.readFileSync(path.join(outDir, 'src', 'aliases.ts'), 'utf-8');
+    expect(aliasesContent).toContain('type _InternalShape');
+    expect(aliasesContent).toContain('_count: number');
+    expect(aliasesContent).toContain('_label: string');
+    expect(aliasesContent).toContain('const { _count: count, _label: label } = arg');
   });
 });

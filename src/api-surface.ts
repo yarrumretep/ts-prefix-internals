@@ -192,6 +192,12 @@ export function discoverPublicApiSurface(
 
     if (ts.isTypeLiteralNode(typeNode)) {
       for (const member of typeNode.members) {
+        const memberName = (member as ts.NamedDeclaration).name;
+        if (memberName) {
+          const memberSymbol = checker.getSymbolAtLocation(memberName);
+          if (memberSymbol) addSymbol(memberSymbol);
+        }
+
         if (ts.isPropertySignature(member) && member.type) {
           walkTypeNode(member.type);
         }

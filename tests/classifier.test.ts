@@ -37,6 +37,15 @@ describe('classifier', () => {
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
     expect(prefixNames).toContain('makeKey');
     expect(prefixNames).toContain('splitKey');
+    expect(prefixNames).toContain('summarizeShape');
+  });
+
+  it('marks internal type aliases and their members as prefix', () => {
+    const result = getClassification();
+    const prefixNames = result.willPrefix.map(d => d.qualifiedName);
+    expect(prefixNames).toContain('InternalShape');
+    expect(prefixNames).toContain('InternalShape.count');
+    expect(prefixNames).toContain('InternalShape.label');
   });
 
   it('marks all members of internal class as prefix', () => {

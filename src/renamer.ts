@@ -15,7 +15,8 @@ export interface RenameResult {
 export function computeRenames(
   languageService: ts.LanguageService,
   program: ts.Program,
-  symbolsToRename: Map<ts.Symbol, string>
+  symbolsToRename: Map<ts.Symbol, string>,
+  publicApiSymbols?: Set<ts.Symbol>
 ): RenameResult {
   const allEdits: PendingEdit[] = [];
   const errors: string[] = [];
@@ -92,8 +93,22 @@ export function computeRenames(
   // ---------------------------------------------------------------------------
   const checker = program.getTypeChecker();
 
+  function isPublicApiSymbol(symbol: ts.Symbol): boolean {
+    if (!publicApiSymbols) return false;
+    if (publicApiSymbols.has(symbol)) return true;
+    if (symbol.flags & ts.SymbolFlags.Alias) {
+      try {
+        return publicApiSymbols.has(checker.getAliasedSymbol(symbol));
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
   // Build lookup: original property name → new name
   const renamedPropNames = new Map<string, string>();
+  const renamedPropertySymbols = new Set<ts.Symbol>();
   for (const [symbol, newName] of symbolsToRename) {
     const decls = symbol.getDeclarations();
     if (!decls) continue;
@@ -108,6 +123,7 @@ export function computeRenames(
     );
     if (isProperty) {
       renamedPropNames.set(symbol.getName(), newName);
+      renamedPropertySymbols.add(symbol);
     }
   }
 
@@ -119,7 +135,9 @@ export function computeRenames(
 
   // Helper: rename all declarations of a property symbol that haven't been
   // edited yet (e.g. inline anonymous type literals)
-  function renamePropertyDeclarations(propDecls: ts.Declaration[] | undefined, propName: string, newName: string): void {
+  function renamePropertyDeclarations(prop: ts.Symbol, propName: string, newName: string): void {
+    if (isPublicApiSymbol(prop)) return;
+    const propDecls = prop.getDeclarations();
     if (!propDecls) return;
     for (const d of propDecls) {
       const declSf = d.getSourceFile();
@@ -143,6 +161,23 @@ export function computeRenames(
     }
   }
 
+  // Helper: find a property on a type, searching union members if needed.
+  // `type.getProperty()` on a union only returns a property if it exists
+  // on ALL members.  For discriminated unions (e.g. Selection = { type: 'none' }
+  // | { type: 'node'; ranges: ... }), variant-specific properties like `ranges`
+  // are missed.  This helper checks each union member individually.
+  function getPropertyFromType(type: ts.Type, propName: string): ts.Symbol | undefined {
+    const prop = type.getProperty(propName);
+    if (prop) return prop;
+    if (type.isUnion()) {
+      for (const member of type.types) {
+        const memberProp = member.getProperty(propName);
+        if (memberProp) return memberProp;
+      }
+    }
+    return undefined;
+  }
+
   // Helper: check if a property is declared in project source (not lib/node_modules)
   function isProjectProperty(prop: ts.Symbol): boolean {
     const propDecls = prop.getDeclarations();
@@ -150,6 +185,22 @@ export function computeRenames(
       const dsf = d.getSourceFile();
       return !dsf.isDeclarationFile && !dsf.fileName.includes('node_modules');
     }) ?? false;
+  }
+
+  function hasEditedDeclaration(prop: ts.Symbol): boolean {
+    const propDecls = prop.getDeclarations();
+    if (!propDecls) return false;
+    for (const d of propDecls) {
+      const declName = (ts.isPropertySignature(d) || ts.isPropertyDeclaration(d))
+        ? d.name
+        : undefined;
+      if (declName && ts.isIdentifier(declName)) {
+        if (editedPositions.has(`${d.getSourceFile().fileName}:${declName.getStart()}`)) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   // Resolve the source object type for object binding patterns like:
@@ -177,6 +228,25 @@ export function computeRenames(
     return undefined;
   }
 
+  // Resolve the source object type for object literals used either as:
+  // - regular object literals with contextual typing: f({ x: 1 })
+  // - destructuring assignment targets: ({ x } = expr)
+  function getObjectLiteralSourceType(objLit: ts.ObjectLiteralExpression): ts.Type | undefined {
+    const contextualType = checker.getContextualType(objLit);
+    if (contextualType) return contextualType;
+
+    const parent = objLit.parent;
+    if (
+      ts.isBinaryExpression(parent) &&
+      parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      parent.left === objLit
+    ) {
+      return checker.getTypeAtLocation(parent.right);
+    }
+
+    return undefined;
+  }
+
   // Walk AST
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || sf.fileName.includes('node_modules')) continue;
@@ -190,8 +260,8 @@ export function computeRenames(
           const pos = node.name.getStart();
           if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
             const type = checker.getTypeAtLocation(node.expression);
-            const prop = type.getProperty(propName);
-            if (prop && isProjectProperty(prop)) {
+            const prop = getPropertyFromType(type, propName);
+            if (prop && isProjectProperty(prop) && !isPublicApiSymbol(prop)) {
               allEdits.push({
                 fileName: sf.fileName,
                 start: pos,
@@ -199,7 +269,7 @@ export function computeRenames(
                 newText: newName,
               });
               editedPositions.add(`${sf.fileName}:${pos}`);
-              renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
+              renamePropertyDeclarations(prop, propName, newName);
             }
           }
         }
@@ -214,10 +284,10 @@ export function computeRenames(
           if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
             const objLit = node.parent;
             if (ts.isObjectLiteralExpression(objLit)) {
-              const contextualType = checker.getContextualType(objLit);
-              if (contextualType) {
-                const prop = contextualType.getProperty(propName);
-                if (prop && isProjectProperty(prop)) {
+              const sourceType = getObjectLiteralSourceType(objLit);
+              if (sourceType) {
+                const prop = getPropertyFromType(sourceType, propName);
+                if (prop && isProjectProperty(prop) && !isPublicApiSymbol(prop)) {
                   allEdits.push({
                     fileName: sf.fileName,
                     start: pos,
@@ -225,7 +295,7 @@ export function computeRenames(
                     newText: newName,
                   });
                   editedPositions.add(`${sf.fileName}:${pos}`);
-                  renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
+                  renamePropertyDeclarations(prop, propName, newName);
                 }
               }
             }
@@ -243,10 +313,10 @@ export function computeRenames(
           if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
             const objLit = node.parent;
             if (ts.isObjectLiteralExpression(objLit)) {
-              const contextualType = checker.getContextualType(objLit);
-              if (contextualType) {
-                const prop = contextualType.getProperty(propName);
-                if (prop && isProjectProperty(prop)) {
+              const sourceType = getObjectLiteralSourceType(objLit);
+              if (sourceType) {
+                const prop = getPropertyFromType(sourceType, propName);
+                if (prop && isProjectProperty(prop) && !isPublicApiSymbol(prop)) {
                   // Expand shorthand: { model } → { __model: model }
                   allEdits.push({
                     fileName: sf.fileName,
@@ -255,7 +325,7 @@ export function computeRenames(
                     newText: `${newName}: ${propName}`,
                   });
                   editedPositions.add(`${sf.fileName}:${pos}`);
-                  renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
+                  renamePropertyDeclarations(prop, propName, newName);
                 }
               }
             }
@@ -263,9 +333,18 @@ export function computeRenames(
         }
       }
 
-      // Case 4: object binding destructuring — const { key } = obj
-      // If the source object's property is being renamed, expand shorthand
-      // to preserve the local binding name: { key } -> { __key: key }.
+      ts.forEachChild(node, visit);
+    };
+
+    ts.forEachChild(sf, visit);
+  }
+
+  // Case 4: object binding destructuring — const { key } = obj
+  // Run after other fallback cases so declaration edits are already known.
+  for (const sf of program.getSourceFiles()) {
+    if (sf.isDeclarationFile || sf.fileName.includes('node_modules')) continue;
+
+    const visitBindings = (node: ts.Node): void => {
       if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
         const propName = node.propertyName && ts.isIdentifier(node.propertyName)
           ? node.propertyName.text
@@ -278,8 +357,13 @@ export function computeRenames(
           if (newName !== undefined) {
             const sourceType = getBindingSourceType(node);
             if (sourceType) {
-              const prop = sourceType.getProperty(propName);
-              if (prop && isProjectProperty(prop)) {
+              const prop = getPropertyFromType(sourceType, propName);
+              if (
+                prop &&
+                isProjectProperty(prop) &&
+                !isPublicApiSymbol(prop) &&
+                (renamedPropertySymbols.has(prop) || hasEditedDeclaration(prop))
+              ) {
                 if (node.propertyName && ts.isIdentifier(node.propertyName)) {
                   const pos = node.propertyName.getStart();
                   if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
@@ -304,17 +388,17 @@ export function computeRenames(
                   }
                 }
 
-                renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
+                renamePropertyDeclarations(prop, propName, newName);
               }
             }
           }
         }
       }
 
-      ts.forEachChild(node, visit);
+      ts.forEachChild(node, visitBindings);
     };
 
-    ts.forEachChild(sf, visit);
+    ts.forEachChild(sf, visitBindings);
   }
 
   // Group edits by file

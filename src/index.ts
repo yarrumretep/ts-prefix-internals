@@ -37,7 +37,8 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
 
   // 4. Compute renames
   const ls = createLanguageService(program);
-  const renameResult = computeRenames(ls, program, classification.symbolsToRename);
+  const renameResult = computeRenames(ls, program, classification.symbolsToRename, publicApiSymbols);
+  const warnings = [...classification.warnings, ...renameResult.errors];
 
   // 5. Write output files
   const projectDir = path.dirname(path.resolve(projectPath));
@@ -46,8 +47,7 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
   fs.mkdirSync(absoluteOutDir, { recursive: true });
 
   for (const [fileName, content] of renameResult.outputFiles) {
-    const relativePath = path.relative(projectDir, fileName);
-    const outPath = path.join(absoluteOutDir, relativePath);
+    const outPath = resolveOutputPath(projectDir, absoluteOutDir, fileName);
     fs.mkdirSync(path.dirname(outPath), { recursive: true });
     fs.writeFileSync(outPath, content);
   }
@@ -69,10 +69,31 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
   return {
     willPrefix: classification.willPrefix,
     willNotPrefix: classification.willNotPrefix,
-    warnings: classification.warnings,
+    warnings,
     outputFiles: renameResult.outputFiles,
     validationErrors,
   };
+}
+
+function resolveOutputPath(projectDir: string, outDir: string, sourceFileName: string): string {
+  const relativePath = path.relative(projectDir, sourceFileName);
+
+  let safeRelativePath = relativePath;
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    const normalized = path.normalize(sourceFileName);
+    const strippedRoot = normalized.replace(/^([A-Za-z]:)?[\\/]+/, '').replace(/:/g, '_');
+    const safeSegments = strippedRoot
+      .split(/[\\/]/)
+      .filter(seg => seg.length > 0 && seg !== '.' && seg !== '..');
+    safeRelativePath = path.join('__external__', ...safeSegments);
+  }
+
+  const outputPath = path.resolve(outDir, safeRelativePath);
+  const outRoot = path.resolve(outDir) + path.sep;
+  if (outputPath !== path.resolve(outDir) && !outputPath.startsWith(outRoot)) {
+    throw new Error(`Refusing to write outside outDir: ${sourceFileName}`);
+  }
+  return outputPath;
 }
 
 function validateOutput(tsconfigPath: string): string[] {

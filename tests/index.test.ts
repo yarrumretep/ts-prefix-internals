@@ -53,4 +53,70 @@ describe('prefixInternals', () => {
     // Cleanup
     fs.rmSync(outDir, { recursive: true, force: true });
   });
+
+  it('writes files outside projectDir under outDir/__external__', async () => {
+    const baseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ts-prefix-path-'));
+    const projectDir = path.join(baseDir, 'project');
+    const sharedDir = path.join(baseDir, 'shared');
+    const outDir = path.join(projectDir, 'out');
+
+    fs.mkdirSync(path.join(projectDir, 'src'), { recursive: true });
+    fs.mkdirSync(sharedDir, { recursive: true });
+
+    const tsconfigPath = path.join(projectDir, 'tsconfig.json');
+    const entryPath = path.join(projectDir, 'src', 'index.ts');
+    const sharedPath = path.join(sharedDir, 'internal.ts');
+
+    fs.writeFileSync(tsconfigPath, JSON.stringify({
+      compilerOptions: {
+        target: 'ES2020',
+        module: 'NodeNext',
+        moduleResolution: 'NodeNext',
+        strict: true,
+        noEmit: true,
+      },
+      files: ['src/index.ts', '../shared/internal.ts'],
+    }, null, 2));
+
+    fs.writeFileSync(entryPath, "export { api } from '../../shared/internal.js';\n");
+    fs.writeFileSync(sharedPath, "export function api(): number { return helper(); }\nfunction helper(): number { return 1; }\n");
+
+    const originalShared = fs.readFileSync(sharedPath, 'utf-8');
+
+    await prefixInternals({
+      projectPath: tsconfigPath,
+      entryPoints: [entryPath],
+      outDir,
+      prefix: '_',
+      dryRun: false,
+      verbose: false,
+      skipValidation: true,
+    });
+
+    // Original source outside projectDir should not be rewritten in-place.
+    expect(fs.readFileSync(sharedPath, 'utf-8')).toBe(originalShared);
+
+    const externalRoot = path.join(outDir, '__external__');
+    expect(fs.existsSync(externalRoot)).toBe(true);
+
+    function findFirstFile(dir: string, fileName: string): string | undefined {
+      const entries = fs.readdirSync(dir, { withFileTypes: true });
+      for (const entry of entries) {
+        const fullPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          const nested = findFirstFile(fullPath, fileName);
+          if (nested) return nested;
+        } else if (entry.isFile() && entry.name === fileName) {
+          return fullPath;
+        }
+      }
+      return undefined;
+    }
+
+    const externalInternalFile = findFirstFile(externalRoot, 'internal.ts');
+    expect(externalInternalFile).toBeDefined();
+    expect(fs.readFileSync(externalInternalFile!, 'utf-8')).toContain('function _helper');
+
+    fs.rmSync(baseDir, { recursive: true, force: true });
+  });
 });

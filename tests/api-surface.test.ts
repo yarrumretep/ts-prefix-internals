@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import path from 'node:path';
+import ts from 'typescript';
 import { createProgramFromConfig } from '../src/program.js';
 import { discoverPublicApiSurface } from '../src/api-surface.js';
 
@@ -77,5 +78,35 @@ describe('api-surface', () => {
     expect(names.has('Alpha')).toBe(true);
     expect(names.has('Beta')).toBe(true);
     expect(names.has('Gamma')).toBe(true);
+  });
+
+  it('includes inline type-literal members in exported signatures', () => {
+    const program = createProgramFromConfig(TEST_PROJECT);
+    const checker = program.getTypeChecker();
+    const publicSymbols = discoverPublicApiSurface(program, checker, [TEST_ENTRY]);
+
+    const wrapperPath = path.resolve(import.meta.dirname, '../test-project/src/wrapper.ts');
+    const wrapperFile = program.getSourceFile(wrapperPath);
+    expect(wrapperFile).toBeDefined();
+
+    let itemsSymbol: ts.Symbol | undefined;
+
+    ts.forEachChild(wrapperFile!, function visit(node) {
+      if (ts.isFunctionDeclaration(node) && node.name?.text === 'buildSpec') {
+        const paramType = node.parameters[0]?.type;
+        if (paramType && ts.isTypeLiteralNode(paramType)) {
+          const itemsMember = paramType.members.find(
+            m => ts.isPropertySignature(m) && !!m.name && ts.isIdentifier(m.name) && m.name.text === 'items'
+          );
+          if (itemsMember && itemsMember.name) {
+            itemsSymbol = checker.getSymbolAtLocation(itemsMember.name);
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    });
+
+    expect(itemsSymbol).toBeDefined();
+    expect(publicSymbols.has(itemsSymbol!)).toBe(true);
   });
 });

@@ -25,6 +25,26 @@ export function getNodeCount(pairs: [string, string][]): number {
   return nodeCount;
 }
 
+// Test assignment destructuring target shape:
+// ({ primary, token } = normalizePayload(...))
+// should become ({ _primary: primary, _token: token } = ...).
+type PayloadSlot = {
+  primary: LinkMap;
+  token: number;
+};
+
+function normalizePayload(input: PayloadSlot): { primary: LinkMap; token: number } {
+  return { primary: input.primary, token: input.token };
+}
+
+export function readPayloadToken(input: PayloadSlot): number {
+  let primary: LinkMap | undefined;
+  let token = -1;
+  ({ primary, token } = normalizePayload(input));
+  if (!primary) throw new Error('primary missing');
+  return token;
+}
+
 // -------------------------------------------------------------------
 // Test: inline anonymous type cast with property access
 //
