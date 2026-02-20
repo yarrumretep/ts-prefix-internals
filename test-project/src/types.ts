@@ -1,4 +1,6 @@
-export interface CellAddress {
+import { Identifiable } from './base.js';
+
+export interface CellAddress extends Identifiable {
   sheet: string;
   row: number;
   col: number;

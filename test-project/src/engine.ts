@@ -1,12 +1,14 @@
 import { CellAddress } from './types.js';
 import { DependencyGraph } from './graph.js';
+import { BaseEngine } from './base.js';
 
-export class CalculationEngine {
+export class CalculationEngine extends BaseEngine {
   private graph: DependencyGraph;
   private dirtySet: Set<string>;
   private valueCache: Map<string, number>;
 
   constructor() {
+    super();
     this.graph = new DependencyGraph();
     this.dirtySet = new Set();
     this.valueCache = new Map();
