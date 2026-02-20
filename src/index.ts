@@ -7,7 +7,7 @@ import { discoverPublicApiSurface } from './api-surface.js';
 import { classifySymbols } from './classifier.js';
 import { computeRenames } from './renamer.js';
 
-export { type PrefixConfig, type PrefixResult } from './config.js';
+export { type PrefixConfig, type PrefixResult, type RenameDecision, parseArgs } from './config.js';
 
 export interface FullResult extends PrefixResult {
   validationErrors?: string[];

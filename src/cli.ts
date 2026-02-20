@@ -1,65 +1,6 @@
 #!/usr/bin/env node
-import path from 'node:path';
-import { PrefixConfig, DEFAULT_PREFIX, RenameDecision } from './config.js';
-import { prefixInternals, FullResult } from './index.js';
-
-export function parseArgs(args: string[]): PrefixConfig {
-  let projectPath = '';
-  const entryPoints: string[] = [];
-  let outDir = '';
-  let prefix = DEFAULT_PREFIX;
-  let dryRun = false;
-  let verbose = false;
-  let skipValidation = false;
-
-  for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    switch (arg) {
-      case '--project':
-      case '-p':
-        projectPath = args[++i];
-        break;
-      case '--entry':
-      case '-e':
-        entryPoints.push(args[++i]);
-        break;
-      case '--outDir':
-      case '-o':
-        outDir = args[++i];
-        break;
-      case '--prefix':
-        prefix = args[++i];
-        break;
-      case '--dry-run':
-        dryRun = true;
-        break;
-      case '--verbose':
-        verbose = true;
-        break;
-      case '--skip-validation':
-        skipValidation = true;
-        break;
-      default:
-        if (arg.startsWith('-')) {
-          throw new Error(`Unknown option: ${arg}`);
-        }
-    }
-  }
-
-  if (!projectPath) throw new Error('--project / -p is required');
-  if (entryPoints.length === 0) throw new Error('--entry / -e is required (at least one)');
-  if (!outDir) throw new Error('--outDir / -o is required');
-
-  return {
-    projectPath: path.resolve(projectPath),
-    entryPoints: entryPoints.map(e => path.resolve(e)),
-    outDir: path.resolve(outDir),
-    prefix,
-    dryRun,
-    verbose,
-    skipValidation,
-  };
-}
+import { parseArgs, RenameDecision } from './config.js';
+import { prefixInternals } from './index.js';
 
 function formatDryRun(willPrefix: RenameDecision[], willNotPrefix: RenameDecision[], warnings: string[]): string {
   const lines: string[] = [];
@@ -126,11 +67,4 @@ async function main() {
   }
 }
 
-// Only run main when executed directly
-const isDirectRun = process.argv[1] && (
-  process.argv[1].endsWith('/cli.js') ||
-  process.argv[1].endsWith('/cli.ts')
-);
-if (isDirectRun) {
-  main();
-}
+main();
