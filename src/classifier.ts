@@ -54,14 +54,6 @@ export function classifySymbols(
   }
 
   function hasDecorators(node: ts.Node): boolean {
-    // In TS 5.x, decorators are modifiers
-    const modifiers = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
-    if (modifiers) {
-      for (const mod of modifiers) {
-        if (mod.kind === ts.SyntaxKind.Decorator) return true;
-      }
-    }
-    // Also check via canHaveDecorators
     const decorators = ts.canHaveDecorators(node) ? ts.getDecorators(node) : undefined;
     return decorators !== undefined && decorators.length > 0;
   }
