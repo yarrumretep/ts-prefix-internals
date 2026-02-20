@@ -26,7 +26,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "prepublishOnly": "npm run build",
-    "release": "npm test && npm version patch && git push origin main --tags && gh release create v$(node -p \"require('./package.json').version\") --generate-notes && npm publish"
+    "release": "./scripts/release.sh"
   },
   "keywords": [
     "typescript",
