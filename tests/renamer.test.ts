@@ -113,4 +113,20 @@ describe('renamer', () => {
     // `const { _nodeCount: nodeCount } = ...` so the local binding keeps its name.
     expect(content).toContain('_nodeCount: nodeCount');
   });
+
+  it('renames property accesses through anonymous inline type casts', () => {
+    const result = getRenames();
+    const builderFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('builder.ts'));
+    expect(builderFile).toBeDefined();
+    const [, content] = builderFile!;
+
+    // `(result as { nodeCount: number }).nodeCount` must become
+    // `(result as { _nodeCount: number })._nodeCount` — both the type
+    // annotation AND the property access must be renamed, even though
+    // findRenameLocations doesn't link anonymous type properties to
+    // the named interface.
+    expect(content).toContain('as { _nodeCount: number })._nodeCount');
+    // The original unprefixed form should not remain
+    expect(content).not.toMatch(/as \{ nodeCount:/);
+  });
 });

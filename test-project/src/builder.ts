@@ -23,3 +23,18 @@ export function getNodeCount(pairs: [string, string][]): number {
   const { nodeCount } = createGraphSetup(pairs);
   return nodeCount;
 }
+
+// -------------------------------------------------------------------
+// Test: inline anonymous type cast with property access
+//
+// When code uses `as { prop: T }` with an inline type literal, TS
+// creates a fresh symbol for the property.  findRenameLocations for
+// GraphSetup.nodeCount won't find `.nodeCount` through the cast.
+// The prefixer's second pass must catch these.
+// -------------------------------------------------------------------
+
+export function getNodeCountViaCast(pairs: [string, string][]): number {
+  const result: GraphSetup = createGraphSetup(pairs);
+  // Access through an anonymous inline cast — the property name must still be renamed
+  return (result as { nodeCount: number }).nodeCount;
+}

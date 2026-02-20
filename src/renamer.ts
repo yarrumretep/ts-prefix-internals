@@ -76,6 +76,112 @@ export function computeRenames(
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Second pass: catch property accesses through anonymous type casts.
+  //
+  // findRenameLocations is symbol-based: if code uses an `as` cast with an
+  // inline type literal (e.g. `(x as { value: T }).value`), TS creates a
+  // fresh symbol for the anonymous type's `value` property.  The rename of
+  // `ParseSuccess.value` → `__value` never reaches that access.
+  //
+  // Fix: walk the AST for property accesses whose name matches a renamed
+  // property but whose position wasn't covered by findRenameLocations.
+  // If the resolved property is declared in a project source file (not
+  // lib.d.ts / node_modules), it's a missed rename — add edits for the
+  // access AND for every declaration of that anonymous property symbol.
+  // ---------------------------------------------------------------------------
+  const checker = program.getTypeChecker();
+
+  // Build lookup: original property name → new name
+  const renamedPropNames = new Map<string, string>();
+  for (const [symbol, newName] of symbolsToRename) {
+    const decls = symbol.getDeclarations();
+    if (!decls) continue;
+    const isProperty = decls.some(d =>
+      ts.isPropertyDeclaration(d) ||
+      ts.isPropertySignature(d) ||
+      ts.isGetAccessorDeclaration(d) ||
+      ts.isSetAccessorDeclaration(d) ||
+      ts.isPropertyAssignment(d) ||
+      ts.isShorthandPropertyAssignment(d) ||
+      ts.isEnumMember(d)
+    );
+    if (isProperty) {
+      renamedPropNames.set(symbol.getName(), newName);
+    }
+  }
+
+  // Build set of positions already covered
+  const editedPositions = new Set<string>();
+  for (const edit of allEdits) {
+    editedPositions.add(`${edit.fileName}:${edit.start}`);
+  }
+
+  // Walk AST
+  for (const sf of program.getSourceFiles()) {
+    if (sf.isDeclarationFile || sf.fileName.includes('node_modules')) continue;
+
+    const visit = (node: ts.Node): void => {
+      if (ts.isPropertyAccessExpression(node)) {
+        const propName = node.name.text;
+        const newName = renamedPropNames.get(propName);
+        if (newName !== undefined) {
+          const pos = node.name.getStart();
+          if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
+            // Missed property access — verify the property is project-internal
+            const type = checker.getTypeAtLocation(node.expression);
+            const prop = type.getProperty(propName);
+            if (prop) {
+              const propDecls = prop.getDeclarations();
+              const isProjectProp = propDecls?.some(d => {
+                const dsf = d.getSourceFile();
+                return !dsf.isDeclarationFile && !dsf.fileName.includes('node_modules');
+              });
+              if (isProjectProp) {
+                // Add edit for this access
+                allEdits.push({
+                  fileName: sf.fileName,
+                  start: pos,
+                  length: propName.length,
+                  newText: newName,
+                });
+                editedPositions.add(`${sf.fileName}:${pos}`);
+
+                // Also rename all declarations of this anonymous property symbol
+                // (e.g. in the inline type literal) so the output type-checks
+                if (propDecls) {
+                  for (const d of propDecls) {
+                    const declSf = d.getSourceFile();
+                    if (declSf.isDeclarationFile || declSf.fileName.includes('node_modules')) continue;
+                    const declName = ts.isPropertySignature(d) || ts.isPropertyDeclaration(d)
+                      ? d.name
+                      : undefined;
+                    if (declName && ts.isIdentifier(declName)) {
+                      const declPos = declName.getStart();
+                      const key = `${declSf.fileName}:${declPos}`;
+                      if (!editedPositions.has(key)) {
+                        allEdits.push({
+                          fileName: declSf.fileName,
+                          start: declPos,
+                          length: propName.length,
+                          newText: newName,
+                        });
+                        editedPositions.add(key);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+      ts.forEachChild(node, visit);
+    };
+
+    ts.forEachChild(sf, visit);
+  }
+
   // Group edits by file
   const editsByFile = new Map<string, PendingEdit[]>();
   for (const edit of allEdits) {
