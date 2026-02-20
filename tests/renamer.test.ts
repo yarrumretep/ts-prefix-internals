@@ -153,4 +153,51 @@ describe('renamer', () => {
     // Result property accesses must also be renamed
     expect(content).toContain('result._total');
   });
+
+  it('renames pass-through wrapper and impl parameter types consistently', () => {
+    const result = getRenames();
+
+    const wrapperFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('wrapper.ts'));
+    expect(wrapperFile).toBeDefined();
+    const [, wrapperContent] = wrapperFile!;
+
+    const implFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('spec-impl.ts'));
+    expect(implFile).toBeDefined();
+    const [, implContent] = implFile!;
+
+    const callerFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('caller.ts'));
+    expect(callerFile).toBeDefined();
+    const [, callerContent] = callerFile!;
+
+    // The InternalResult interface is internal, so its 'items' property
+    // gets classified for rename.  This puts "items" into renamedPropNames.
+    // The second pass then finds the call site in caller.ts and renames
+    // the 'items' key in the object literal, plus the wrapper's anonymous
+    // parameter type declaration via renamePropertyDeclarations.
+    //
+    // BUG: The impl's matching anonymous parameter type is NOT renamed,
+    // so the wrapper passes { _items: ... } but the impl expects { items: ... }.
+    //
+    // Both anonymous types must be renamed consistently.  Either:
+    //   (a) both rename 'items' to '_items', or
+    //   (b) neither renames 'items'
+
+    // The wrapper's PARAMETER TYPE annotation gets 'items' renamed to '_items'
+    // by the second pass (triggered by the call site in caller.ts).
+    // Extract just the parameter type from the function signature.
+    const wrapperParamMatch = wrapperContent.match(/function buildSpec\(args: \{([^}]+)\}/);
+    expect(wrapperParamMatch).toBeDefined();
+    const wrapperParamType = wrapperParamMatch![1];
+    const wrapperHasRenamedItems = wrapperParamType.includes('_items');
+
+    // The impl's PARAMETER TYPE annotation must match.
+    const implParamMatch = implContent.match(/function _buildSpecImpl\(args: \{([^}]+)\}/);
+    expect(implParamMatch).toBeDefined();
+    const implParamType = implParamMatch![1];
+    const implHasRenamedItems = implParamType.includes('_items');
+
+    // They MUST agree — the wrapper passes args directly to the impl,
+    // so if one renames 'items' to '_items', the other must too.
+    expect(wrapperHasRenamedItems).toBe(implHasRenamedItems);
+  });
 });
