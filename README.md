@@ -56,7 +56,7 @@ After prefixing, you configure your minifier to mangle everything matching `/^_/
 ## Install
 
 ```bash
-npm install -D github:yarrumretep/ts-prefix-internals
+npm install -D ts-prefix-internals
 ```
 
 ## Usage
