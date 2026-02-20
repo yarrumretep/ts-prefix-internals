@@ -1,5 +1,7 @@
 # ts-prefix-internals
 
+[![CI](https://github.com/yarrumretep/ts-prefix-internals/actions/workflows/ci.yml/badge.svg)](https://github.com/yarrumretep/ts-prefix-internals/actions/workflows/ci.yml)
+
 A TypeScript CLI tool that prefixes internal symbols with `_` so that terser or esbuild can aggressively mangle them via `mangleProps: /^_/`.
 
 ## The Problem
