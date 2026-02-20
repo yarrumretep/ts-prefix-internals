@@ -152,6 +152,31 @@ export function computeRenames(
     }) ?? false;
   }
 
+  // Resolve the source object type for object binding patterns like:
+  // `const { x } = expr` or `function f({ x }: T)`.
+  function getBindingSourceType(node: ts.BindingElement): ts.Type | undefined {
+    const pattern = node.parent;
+    if (!ts.isObjectBindingPattern(pattern)) return undefined;
+
+    const container = pattern.parent;
+
+    if (ts.isVariableDeclaration(container) && container.initializer) {
+      return checker.getTypeAtLocation(container.initializer);
+    }
+
+    if (ts.isParameter(container)) {
+      if (container.type) {
+        return checker.getTypeFromTypeNode(container.type);
+      }
+      const symbol = checker.getSymbolAtLocation(container.name);
+      if (symbol) {
+        return checker.getTypeOfSymbolAtLocation(symbol, container);
+      }
+    }
+
+    return undefined;
+  }
+
   // Walk AST
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || sf.fileName.includes('node_modules')) continue;
@@ -232,6 +257,54 @@ export function computeRenames(
                   editedPositions.add(`${sf.fileName}:${pos}`);
                   renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
                 }
+              }
+            }
+          }
+        }
+      }
+
+      // Case 4: object binding destructuring — const { key } = obj
+      // If the source object's property is being renamed, expand shorthand
+      // to preserve the local binding name: { key } -> { __key: key }.
+      if (ts.isBindingElement(node) && ts.isObjectBindingPattern(node.parent)) {
+        const propName = node.propertyName && ts.isIdentifier(node.propertyName)
+          ? node.propertyName.text
+          : ts.isIdentifier(node.name)
+            ? node.name.text
+            : undefined;
+
+        if (propName !== undefined) {
+          const newName = renamedPropNames.get(propName);
+          if (newName !== undefined) {
+            const sourceType = getBindingSourceType(node);
+            if (sourceType) {
+              const prop = sourceType.getProperty(propName);
+              if (prop && isProjectProperty(prop)) {
+                if (node.propertyName && ts.isIdentifier(node.propertyName)) {
+                  const pos = node.propertyName.getStart();
+                  if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
+                    allEdits.push({
+                      fileName: sf.fileName,
+                      start: pos,
+                      length: propName.length,
+                      newText: newName,
+                    });
+                    editedPositions.add(`${sf.fileName}:${pos}`);
+                  }
+                } else if (ts.isIdentifier(node.name)) {
+                  const pos = node.name.getStart();
+                  if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
+                    allEdits.push({
+                      fileName: sf.fileName,
+                      start: pos,
+                      length: propName.length,
+                      newText: `${newName}: ${propName}`,
+                    });
+                    editedPositions.add(`${sf.fileName}:${pos}`);
+                  }
+                }
+
+                renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
               }
             }
           }
