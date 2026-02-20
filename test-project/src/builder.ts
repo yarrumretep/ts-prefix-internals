@@ -1,4 +1,5 @@
 import { LinkMap } from './graph.js';
+import { createUtilResult } from './utils.js';
 
 // Internal interface — NOT exported from barrel.
 // Its properties should be prefixed.
@@ -37,4 +38,30 @@ export function getNodeCountViaCast(pairs: [string, string][]): number {
   const result: GraphSetup = createGraphSetup(pairs);
   // Access through an anonymous inline cast — the property name must still be renamed
   return (result as { nodeCount: number }).nodeCount;
+}
+
+// -------------------------------------------------------------------
+// Test: cross-file call to function with inline anonymous parameter type.
+// createUtilResult is defined in utils.ts with an inline parameter type.
+// findRenameLocations for those properties may not find THIS call site.
+// -------------------------------------------------------------------
+
+export function buildUtilResult(data: [string, string][]): number {
+  const graph = new LinkMap();
+  // Non-shorthand call — keys must be renamed
+  const result = createUtilResult({
+    total: data.length,
+    label: 'test',
+    graph: graph,
+  });
+  return result.total;
+}
+
+export function buildUtilResultShorthand(data: [string, string][]): number {
+  const graph = new LinkMap();
+  const total = data.length;
+  const label = 'test';
+  // Shorthand call — { graph } must expand to { _graph: graph }
+  const result = createUtilResult({ total, label, graph });
+  return result.total;
 }

@@ -117,65 +117,127 @@ export function computeRenames(
     editedPositions.add(`${edit.fileName}:${edit.start}`);
   }
 
+  // Helper: rename all declarations of a property symbol that haven't been
+  // edited yet (e.g. inline anonymous type literals)
+  function renamePropertyDeclarations(propDecls: ts.Declaration[] | undefined, propName: string, newName: string): void {
+    if (!propDecls) return;
+    for (const d of propDecls) {
+      const declSf = d.getSourceFile();
+      if (declSf.isDeclarationFile || declSf.fileName.includes('node_modules')) continue;
+      const declName = (ts.isPropertySignature(d) || ts.isPropertyDeclaration(d))
+        ? d.name
+        : undefined;
+      if (declName && ts.isIdentifier(declName)) {
+        const declPos = declName.getStart();
+        const key = `${declSf.fileName}:${declPos}`;
+        if (!editedPositions.has(key)) {
+          allEdits.push({
+            fileName: declSf.fileName,
+            start: declPos,
+            length: propName.length,
+            newText: newName,
+          });
+          editedPositions.add(key);
+        }
+      }
+    }
+  }
+
+  // Helper: check if a property is declared in project source (not lib/node_modules)
+  function isProjectProperty(prop: ts.Symbol): boolean {
+    const propDecls = prop.getDeclarations();
+    return propDecls?.some(d => {
+      const dsf = d.getSourceFile();
+      return !dsf.isDeclarationFile && !dsf.fileName.includes('node_modules');
+    }) ?? false;
+  }
+
   // Walk AST
   for (const sf of program.getSourceFiles()) {
     if (sf.isDeclarationFile || sf.fileName.includes('node_modules')) continue;
 
     const visit = (node: ts.Node): void => {
+      // Case 1: property access expressions — obj.prop
       if (ts.isPropertyAccessExpression(node)) {
         const propName = node.name.text;
         const newName = renamedPropNames.get(propName);
         if (newName !== undefined) {
           const pos = node.name.getStart();
           if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
-            // Missed property access — verify the property is project-internal
             const type = checker.getTypeAtLocation(node.expression);
             const prop = type.getProperty(propName);
-            if (prop) {
-              const propDecls = prop.getDeclarations();
-              const isProjectProp = propDecls?.some(d => {
-                const dsf = d.getSourceFile();
-                return !dsf.isDeclarationFile && !dsf.fileName.includes('node_modules');
+            if (prop && isProjectProperty(prop)) {
+              allEdits.push({
+                fileName: sf.fileName,
+                start: pos,
+                length: propName.length,
+                newText: newName,
               });
-              if (isProjectProp) {
-                // Add edit for this access
-                allEdits.push({
-                  fileName: sf.fileName,
-                  start: pos,
-                  length: propName.length,
-                  newText: newName,
-                });
-                editedPositions.add(`${sf.fileName}:${pos}`);
+              editedPositions.add(`${sf.fileName}:${pos}`);
+              renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
+            }
+          }
+        }
+      }
 
-                // Also rename all declarations of this anonymous property symbol
-                // (e.g. in the inline type literal) so the output type-checks
-                if (propDecls) {
-                  for (const d of propDecls) {
-                    const declSf = d.getSourceFile();
-                    if (declSf.isDeclarationFile || declSf.fileName.includes('node_modules')) continue;
-                    const declName = ts.isPropertySignature(d) || ts.isPropertyDeclaration(d)
-                      ? d.name
-                      : undefined;
-                    if (declName && ts.isIdentifier(declName)) {
-                      const declPos = declName.getStart();
-                      const key = `${declSf.fileName}:${declPos}`;
-                      if (!editedPositions.has(key)) {
-                        allEdits.push({
-                          fileName: declSf.fileName,
-                          start: declPos,
-                          length: propName.length,
-                          newText: newName,
-                        });
-                        editedPositions.add(key);
-                      }
-                    }
-                  }
+      // Case 2: property assignment in object literals — { key: value }
+      if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
+        const propName = node.name.text;
+        const newName = renamedPropNames.get(propName);
+        if (newName !== undefined) {
+          const pos = node.name.getStart();
+          if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
+            const objLit = node.parent;
+            if (ts.isObjectLiteralExpression(objLit)) {
+              const contextualType = checker.getContextualType(objLit);
+              if (contextualType) {
+                const prop = contextualType.getProperty(propName);
+                if (prop && isProjectProperty(prop)) {
+                  allEdits.push({
+                    fileName: sf.fileName,
+                    start: pos,
+                    length: propName.length,
+                    newText: newName,
+                  });
+                  editedPositions.add(`${sf.fileName}:${pos}`);
+                  renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
                 }
               }
             }
           }
         }
       }
+
+      // Case 3: shorthand property in object literals — { key }
+      // Must expand to { __key: key } when the property is renamed
+      if (ts.isShorthandPropertyAssignment(node)) {
+        const propName = node.name.text;
+        const newName = renamedPropNames.get(propName);
+        if (newName !== undefined) {
+          const pos = node.name.getStart();
+          if (!editedPositions.has(`${sf.fileName}:${pos}`)) {
+            const objLit = node.parent;
+            if (ts.isObjectLiteralExpression(objLit)) {
+              const contextualType = checker.getContextualType(objLit);
+              if (contextualType) {
+                const prop = contextualType.getProperty(propName);
+                if (prop && isProjectProperty(prop)) {
+                  // Expand shorthand: { model } → { __model: model }
+                  allEdits.push({
+                    fileName: sf.fileName,
+                    start: pos,
+                    length: propName.length,
+                    newText: `${newName}: ${propName}`,
+                  });
+                  editedPositions.add(`${sf.fileName}:${pos}`);
+                  renamePropertyDeclarations(prop.getDeclarations(), propName, newName);
+                }
+              }
+            }
+          }
+        }
+      }
+
       ts.forEachChild(node, visit);
     };
 

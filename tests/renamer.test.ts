@@ -129,4 +129,28 @@ describe('renamer', () => {
     // The original unprefixed form should not remain
     expect(content).not.toMatch(/as \{ nodeCount:/);
   });
+
+  it('renames property keys in cross-file object literals passed to functions with inline anonymous parameter types', () => {
+    const result = getRenames();
+    const builderFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('builder.ts'));
+    expect(builderFile).toBeDefined();
+    const [, content] = builderFile!;
+
+    // createUtilResult is defined in utils.ts with inline parameter type
+    // `args: { total: number; label: string; graph: LinkMap }`.
+    // The call sites are in builder.ts (cross-file).
+
+    // Non-shorthand call site keys must be renamed
+    expect(content).toContain('_total: data.length');
+    expect(content).toContain("_label: 'test'");
+    expect(content).toContain('_graph: graph');
+
+    // Shorthand call site must expand: { graph } → { _graph: graph }
+    expect(content).toMatch(/_total: total/);
+    expect(content).toMatch(/_label: label/);
+    expect(content).toMatch(/_graph: graph/);
+
+    // Result property accesses must also be renamed
+    expect(content).toContain('result._total');
+  });
 });
