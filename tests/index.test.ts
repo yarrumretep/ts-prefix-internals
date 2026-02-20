@@ -22,14 +22,14 @@ describe('prefixInternals', () => {
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
     const noPrefixNames = result.willNotPrefix.map(d => d.qualifiedName);
 
-    expect(prefixNames).toContain('DependencyGraph');
-    expect(prefixNames).toContain('hashKey');
-    expect(prefixNames).toContain('parseKey');
-    expect(prefixNames).toContain('CalculationEngine.graph');
+    expect(prefixNames).toContain('LinkMap');
+    expect(prefixNames).toContain('makeKey');
+    expect(prefixNames).toContain('splitKey');
+    expect(prefixNames).toContain('Processor.links');
 
-    expect(noPrefixNames).toContain('CalculationEngine');
-    expect(noPrefixNames).toContain('CalculationEngine.setCellValue');
-    expect(noPrefixNames).toContain('CellAddress');
+    expect(noPrefixNames).toContain('Processor');
+    expect(noPrefixNames).toContain('Processor.setEntry');
+    expect(noPrefixNames).toContain('Coord');
   });
 
   it('writes output files that compile', async () => {

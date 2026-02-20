@@ -1,23 +1,23 @@
 // Exported class with getters/setters whose types reference internal types
-import { FormatOptions } from './format-options.js';
+import { PresenterConfig } from './format-options.js';
 
-export class Formatter {
-  private currentOptions: FormatOptions;
+export class Presenter {
+  private current: PresenterConfig;
 
-  constructor(options: FormatOptions) {
-    this.currentOptions = options;
+  constructor(config: PresenterConfig) {
+    this.current = config;
   }
 
-  get options(): FormatOptions {
-    return this.currentOptions;
+  get config(): PresenterConfig {
+    return this.current;
   }
 
-  set options(value: FormatOptions) {
-    this.currentOptions = value;
+  set config(value: PresenterConfig) {
+    this.current = value;
   }
 
-  format(input: string): string {
-    if (this.currentOptions.uppercase) {
+  apply(input: string): string {
+    if (this.current.enabled) {
       return input.toUpperCase();
     }
     return input;

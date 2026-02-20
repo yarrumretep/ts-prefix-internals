@@ -1,18 +1,18 @@
-import { Identifiable } from './base.js';
+import { Taggable } from './base.js';
 
-export interface CellAddress extends Identifiable {
-  sheet: string;
-  row: number;
-  col: number;
+export interface Coord extends Taggable {
+  ns: string;
+  x: number;
+  y: number;
 }
 
-export interface CellRange {
-  start: CellAddress;
-  end: CellAddress;
+export interface CoordRange {
+  from: Coord;
+  to: Coord;
 }
 
-export enum CellType {
-  Number = 'number',
-  Text = 'text',
-  Formula = 'formula',
+export enum CoordKind {
+  Alpha = 'alpha',
+  Beta = 'beta',
+  Gamma = 'gamma',
 }

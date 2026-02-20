@@ -1,46 +1,46 @@
-import { CellAddress } from './types.js';
-import { DependencyGraph } from './graph.js';
-import { BaseEngine } from './base.js';
+import { Coord } from './types.js';
+import { LinkMap } from './graph.js';
+import { BaseProcessor } from './base.js';
 
-export class CalculationEngine extends BaseEngine {
-  private graph: DependencyGraph;
-  private dirtySet: Set<string>;
-  private valueCache: Map<string, number>;
+export class Processor extends BaseProcessor {
+  private links: LinkMap;
+  private pending: Set<string>;
+  private cache: Map<string, number>;
 
   constructor() {
     super();
-    this.graph = new DependencyGraph();
-    this.dirtySet = new Set();
-    this.valueCache = new Map();
+    this.links = new LinkMap();
+    this.pending = new Set();
+    this.cache = new Map();
   }
 
-  public setCellValue(address: CellAddress, value: number): void {
-    const key = this.addressToKey(address);
-    this.valueCache.set(key, value);
-    this.markDirty(key);
+  public setEntry(coord: Coord, value: number): void {
+    const key = this.toKey(coord);
+    this.cache.set(key, value);
+    this.mark(key);
   }
 
-  public getCellValue(address: CellAddress): number | undefined {
-    const key = this.addressToKey(address);
-    if (this.dirtySet.has(key)) {
-      this.recalculate(key);
+  public getEntry(coord: Coord): number | undefined {
+    const key = this.toKey(coord);
+    if (this.pending.has(key)) {
+      this.refresh(key);
     }
-    return this.valueCache.get(key);
+    return this.cache.get(key);
   }
 
-  private addressToKey(address: CellAddress): string {
-    return `${address.sheet}!${address.row}:${address.col}`;
+  private toKey(coord: Coord): string {
+    return `${coord.ns}:${coord.x}:${coord.y}`;
   }
 
-  private markDirty(key: string): void {
-    this.dirtySet.add(key);
-    const dependents = this.graph.getDependents(key);
-    for (const dep of dependents) {
-      this.markDirty(dep);
+  private mark(key: string): void {
+    this.pending.add(key);
+    const deps = this.links.followers(key);
+    for (const dep of deps) {
+      this.mark(dep);
     }
   }
 
-  private recalculate(key: string): void {
-    this.dirtySet.delete(key);
+  private refresh(key: string): void {
+    this.pending.delete(key);
   }
 }

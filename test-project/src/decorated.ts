@@ -15,19 +15,19 @@ function log(_target: any, propertyKey: string, descriptor: PropertyDescriptor) 
 }
 
 @sealed
-export class DecoratedService {
-  private secret: string;
+export class DecoratedHandler {
+  private hidden: string;
 
   constructor() {
-    this.secret = 'hidden';
+    this.hidden = 'value';
   }
 
   @log
-  processData(input: string): string {
-    return input + this.secret;
+  handle(input: string): string {
+    return input + this.hidden;
   }
 
-  internalMethod(): void {
-    // not decorated, but class is decorated
+  helperMethod(): void {
+    // not decorated
   }
 }

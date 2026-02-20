@@ -38,70 +38,70 @@ describe('end-to-end', () => {
     const prefixed = new Set(result.willPrefix.map(d => d.qualifiedName));
 
     // Internal class
-    expect(prefixed.has('DependencyGraph')).toBe(true);
-    expect(prefixed.has('DependencyGraph.adjacency')).toBe(true);
-    expect(prefixed.has('DependencyGraph.reverseAdjacency')).toBe(true);
-    expect(prefixed.has('DependencyGraph.addDependency')).toBe(true);
-    expect(prefixed.has('DependencyGraph.getDependents')).toBe(true);
-    expect(prefixed.has('DependencyGraph.getDependencies')).toBe(true);
-    expect(prefixed.has('DependencyGraph.hasCycle')).toBe(true);
+    expect(prefixed.has('LinkMap')).toBe(true);
+    expect(prefixed.has('LinkMap.forward')).toBe(true);
+    expect(prefixed.has('LinkMap.reverse')).toBe(true);
+    expect(prefixed.has('LinkMap.connect')).toBe(true);
+    expect(prefixed.has('LinkMap.followers')).toBe(true);
+    expect(prefixed.has('LinkMap.targets')).toBe(true);
+    expect(prefixed.has('LinkMap.hasLoop')).toBe(true);
 
     // Private members of public class
-    expect(prefixed.has('CalculationEngine.graph')).toBe(true);
-    expect(prefixed.has('CalculationEngine.dirtySet')).toBe(true);
-    expect(prefixed.has('CalculationEngine.valueCache')).toBe(true);
-    expect(prefixed.has('CalculationEngine.addressToKey')).toBe(true);
-    expect(prefixed.has('CalculationEngine.markDirty')).toBe(true);
-    expect(prefixed.has('CalculationEngine.recalculate')).toBe(true);
+    expect(prefixed.has('Processor.links')).toBe(true);
+    expect(prefixed.has('Processor.pending')).toBe(true);
+    expect(prefixed.has('Processor.cache')).toBe(true);
+    expect(prefixed.has('Processor.toKey')).toBe(true);
+    expect(prefixed.has('Processor.mark')).toBe(true);
+    expect(prefixed.has('Processor.refresh')).toBe(true);
 
     // Internal functions
-    expect(prefixed.has('hashKey')).toBe(true);
-    expect(prefixed.has('parseKey')).toBe(true);
+    expect(prefixed.has('makeKey')).toBe(true);
+    expect(prefixed.has('splitKey')).toBe(true);
   });
 
   it('does not prefix any public API symbols', () => {
     const notPrefixed = new Set(result.willNotPrefix.map(d => d.qualifiedName));
 
-    expect(notPrefixed.has('CalculationEngine')).toBe(true);
-    expect(notPrefixed.has('CalculationEngine.setCellValue')).toBe(true);
-    expect(notPrefixed.has('CalculationEngine.getCellValue')).toBe(true);
-    expect(notPrefixed.has('CellAddress')).toBe(true);
-    expect(notPrefixed.has('CellRange')).toBe(true);
-    expect(notPrefixed.has('CellType')).toBe(true);
+    expect(notPrefixed.has('Processor')).toBe(true);
+    expect(notPrefixed.has('Processor.setEntry')).toBe(true);
+    expect(notPrefixed.has('Processor.getEntry')).toBe(true);
+    expect(notPrefixed.has('Coord')).toBe(true);
+    expect(notPrefixed.has('CoordRange')).toBe(true);
+    expect(notPrefixed.has('CoordKind')).toBe(true);
   });
 
   it('output engine.ts has correct renames', () => {
     const engineContent = fs.readFileSync(path.join(outDir, 'src', 'engine.ts'), 'utf-8');
 
     // Public class name preserved
-    expect(engineContent).toContain('class CalculationEngine');
+    expect(engineContent).toContain('class Processor');
 
     // Private members prefixed
-    expect(engineContent).toContain('this._graph');
-    expect(engineContent).toContain('this._dirtySet');
-    expect(engineContent).toContain('this._valueCache');
-    expect(engineContent).toContain('_addressToKey');
-    expect(engineContent).toContain('_markDirty');
-    expect(engineContent).toContain('_recalculate');
+    expect(engineContent).toContain('this._links');
+    expect(engineContent).toContain('this._pending');
+    expect(engineContent).toContain('this._cache');
+    expect(engineContent).toContain('_toKey');
+    expect(engineContent).toContain('_mark');
+    expect(engineContent).toContain('_refresh');
 
     // Internal class reference prefixed
-    expect(engineContent).toContain('_DependencyGraph');
+    expect(engineContent).toContain('_LinkMap');
 
     // Public methods preserved
-    expect(engineContent).toContain('setCellValue');
-    expect(engineContent).toContain('getCellValue');
+    expect(engineContent).toContain('setEntry');
+    expect(engineContent).toContain('getEntry');
   });
 
   it('output graph.ts has fully prefixed class', () => {
     const graphContent = fs.readFileSync(path.join(outDir, 'src', 'graph.ts'), 'utf-8');
 
-    expect(graphContent).toContain('class _DependencyGraph');
-    expect(graphContent).toContain('_adjacency');
-    expect(graphContent).toContain('_reverseAdjacency');
-    expect(graphContent).toContain('_addDependency');
-    expect(graphContent).toContain('_getDependents');
-    expect(graphContent).toContain('_getDependencies');
-    expect(graphContent).toContain('_hasCycle');
+    expect(graphContent).toContain('class _LinkMap');
+    expect(graphContent).toContain('_forward');
+    expect(graphContent).toContain('_reverse');
+    expect(graphContent).toContain('_connect');
+    expect(graphContent).toContain('_followers');
+    expect(graphContent).toContain('_targets');
+    expect(graphContent).toContain('_hasLoop');
   });
 
   it('output types.ts is unchanged (all public)', () => {

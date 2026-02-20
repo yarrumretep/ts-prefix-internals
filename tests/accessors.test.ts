@@ -30,40 +30,40 @@ describe('getter/setter and constructor parameter type discovery', () => {
   }
 
   describe('getter/setter type references', () => {
-    it('discovers FormatOptions as public because Formatter.options getter returns it', () => {
+    it('discovers PresenterConfig as public because Presenter.config getter returns it', () => {
       const names = getPublicNames();
-      // FormatOptions is not exported from barrel, but Formatter (which IS exported)
+      // PresenterConfig is not exported from barrel, but Presenter (which IS exported)
       // has a getter that returns it — so it leaks through the public API
-      expect(names.has('FormatOptions')).toBe(true);
+      expect(names.has('PresenterConfig')).toBe(true);
     });
 
-    it('discovers FormatOptions members as public', () => {
+    it('discovers PresenterConfig members as public', () => {
       const names = getPublicNames();
-      expect(names.has('uppercase')).toBe(true);
-      expect(names.has('trimWhitespace')).toBe(true);
+      expect(names.has('enabled')).toBe(true);
+      expect(names.has('strict')).toBe(true);
     });
 
-    it('does NOT prefix FormatOptions or its members', () => {
+    it('does NOT prefix PresenterConfig or its members', () => {
       const result = getClassification();
       const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-      expect(prefixNames).not.toContain('FormatOptions');
-      expect(prefixNames).not.toContain('FormatOptions.uppercase');
-      expect(prefixNames).not.toContain('FormatOptions.trimWhitespace');
+      expect(prefixNames).not.toContain('PresenterConfig');
+      expect(prefixNames).not.toContain('PresenterConfig.enabled');
+      expect(prefixNames).not.toContain('PresenterConfig.strict');
     });
 
-    it('DOES prefix Formatter.currentOptions (private member)', () => {
+    it('DOES prefix Presenter.current (private member)', () => {
       const result = getClassification();
       const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-      expect(prefixNames).toContain('Formatter.currentOptions');
+      expect(prefixNames).toContain('Presenter.current');
     });
   });
 
   describe('constructor parameter types', () => {
-    it('discovers FormatOptions via constructor parameter type on Formatter', () => {
-      // The Formatter constructor takes FormatOptions as a parameter type.
+    it('discovers PresenterConfig via constructor parameter type on Presenter', () => {
+      // The Presenter constructor takes PresenterConfig as a parameter type.
       // Even without the getter, the constructor parameter type should make it public.
       const names = getPublicNames();
-      expect(names.has('FormatOptions')).toBe(true);
+      expect(names.has('PresenterConfig')).toBe(true);
     });
   });
 
@@ -82,13 +82,13 @@ describe('getter/setter and constructor parameter type discovery', () => {
 
       expect(result.validationErrors).toBeUndefined();
 
-      // accessors.ts should preserve FormatOptions references
+      // accessors.ts should preserve PresenterConfig references
       const accessorsContent = fs.readFileSync(path.join(outDir, 'src', 'accessors.ts'), 'utf-8');
-      expect(accessorsContent).toContain('FormatOptions');
-      expect(accessorsContent).not.toContain('_FormatOptions');
+      expect(accessorsContent).toContain('PresenterConfig');
+      expect(accessorsContent).not.toContain('_PresenterConfig');
 
       // Private member should be prefixed
-      expect(accessorsContent).toContain('_currentOptions');
+      expect(accessorsContent).toContain('_current');
 
       fs.rmSync(outDir, { recursive: true, force: true });
     });

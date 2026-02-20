@@ -114,17 +114,17 @@ Given a project with a barrel export:
 
 ```typescript
 // src/index.ts
-export { CalculationEngine } from './engine';
-export { CellAddress, CellType } from './types';
+export { Processor } from './engine';
+export { Coord, CoordKind } from './types';
 ```
 
 And an internal class not exported from the barrel:
 
 ```typescript
 // src/graph.ts
-export class DependencyGraph {
-  private adjacency: Map<string, Set<string>>;
-  addDependency(from: string, to: string): void { /* ... */ }
+export class LinkMap {
+  private forward: Map<string, Set<string>>;
+  connect(a: string, b: string): void { /* ... */ }
 }
 ```
 
@@ -132,17 +132,17 @@ Running the tool produces:
 
 ```
 WILL PREFIX (internal):
-  DependencyGraph                class    graph.ts:1     -> _DependencyGraph
-  DependencyGraph.adjacency      property graph.ts:2     -> _adjacency
-  DependencyGraph.addDependency  method   graph.ts:4     -> _addDependency
-  CalculationEngine.graph        property engine.ts:5    -> _graph
-  CalculationEngine.dirtySet     property engine.ts:6    -> _dirtySet
+  LinkMap                  class    graph.ts:1     -> _LinkMap
+  LinkMap.forward          property graph.ts:2     -> _forward
+  LinkMap.connect          method   graph.ts:4     -> _connect
+  Processor.links          property engine.ts:5    -> _links
+  Processor.pending        property engine.ts:6    -> _pending
 
 WILL NOT PREFIX (public API):
-  CalculationEngine              class    engine.ts:4    (exported)
-  CalculationEngine.setCellValue method   engine.ts:15   (public member)
-  CellAddress                    interface types.ts:1    (exported)
-  CellAddress.sheet              property types.ts:2     (interface member)
+  Processor                class    engine.ts:4    (exported)
+  Processor.setEntry       method   engine.ts:15   (public member)
+  Coord                    interface types.ts:1    (exported)
+  Coord.ns                 property types.ts:2     (interface member)
 ```
 
 The output directory contains valid TypeScript where all internal symbols are prefixed, ready for aggressive minification.

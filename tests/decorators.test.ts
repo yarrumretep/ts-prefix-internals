@@ -21,25 +21,25 @@ describe('decorator handling', () => {
   it('does NOT prefix a class decorated with @sealed', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    // DecoratedService is internal (not exported from barrel) but has @sealed decorator
+    // DecoratedHandler is internal (not exported from barrel) but has @sealed decorator
     // Decorated symbols must not be prefixed because decorators may rely on name reflection
-    expect(prefixNames).not.toContain('DecoratedService');
+    expect(prefixNames).not.toContain('DecoratedHandler');
   });
 
   it('does NOT prefix a method decorated with @log', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    // processData has @log decorator — renaming it would break the decorator's reflection
-    expect(prefixNames).not.toContain('DecoratedService.processData');
+    // handle has @log decorator — renaming it would break the decorator's reflection
+    expect(prefixNames).not.toContain('DecoratedHandler.handle');
   });
 
   it('DOES prefix non-decorated members of a decorated class', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    // secret is a private field with no decorator — should be prefixed
-    expect(prefixNames).toContain('DecoratedService.secret');
-    // internalMethod has no decorator — should be prefixed
-    expect(prefixNames).toContain('DecoratedService.internalMethod');
+    // hidden is a private field with no decorator — should be prefixed
+    expect(prefixNames).toContain('DecoratedHandler.hidden');
+    // helperMethod has no decorator — should be prefixed
+    expect(prefixNames).toContain('DecoratedHandler.helperMethod');
   });
 
   it('output compiles with decorated symbols left intact', async () => {
@@ -58,15 +58,15 @@ describe('decorator handling', () => {
 
     const decoratedContent = fs.readFileSync(path.join(outDir, 'src', 'decorated.ts'), 'utf-8');
     // Decorated class name preserved
-    expect(decoratedContent).toContain('class DecoratedService');
-    expect(decoratedContent).not.toContain('class _DecoratedService');
+    expect(decoratedContent).toContain('class DecoratedHandler');
+    expect(decoratedContent).not.toContain('class _DecoratedHandler');
     // Decorated method name preserved
-    expect(decoratedContent).toContain('processData');
-    expect(decoratedContent).not.toContain('_processData');
+    expect(decoratedContent).toContain('handle');
+    expect(decoratedContent).not.toContain('_handle');
     // Non-decorated private member prefixed
-    expect(decoratedContent).toContain('_secret');
+    expect(decoratedContent).toContain('_hidden');
     // Non-decorated method prefixed
-    expect(decoratedContent).toContain('_internalMethod');
+    expect(decoratedContent).toContain('_helperMethod');
 
     fs.rmSync(outDir, { recursive: true, force: true });
   });

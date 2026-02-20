@@ -18,15 +18,15 @@ describe('api-surface', () => {
     }
 
     // Directly exported symbols
-    expect(names.has('CalculationEngine')).toBe(true);
-    expect(names.has('CellAddress')).toBe(true);
-    expect(names.has('CellRange')).toBe(true);
-    expect(names.has('CellType')).toBe(true);
+    expect(names.has('Processor')).toBe(true);
+    expect(names.has('Coord')).toBe(true);
+    expect(names.has('CoordRange')).toBe(true);
+    expect(names.has('CoordKind')).toBe(true);
 
     // NOT exported from barrel
-    expect(names.has('DependencyGraph')).toBe(false);
-    expect(names.has('hashKey')).toBe(false);
-    expect(names.has('parseKey')).toBe(false);
+    expect(names.has('LinkMap')).toBe(false);
+    expect(names.has('makeKey')).toBe(false);
+    expect(names.has('splitKey')).toBe(false);
   });
 
   it('includes public members of exported classes', () => {
@@ -39,12 +39,12 @@ describe('api-surface', () => {
       names.add(sym.getName());
     }
 
-    expect(names.has('setCellValue')).toBe(true);
-    expect(names.has('getCellValue')).toBe(true);
+    expect(names.has('setEntry')).toBe(true);
+    expect(names.has('getEntry')).toBe(true);
 
-    expect(names.has('addressToKey')).toBe(false);
-    expect(names.has('markDirty')).toBe(false);
-    expect(names.has('recalculate')).toBe(false);
+    expect(names.has('toKey')).toBe(false);
+    expect(names.has('mark')).toBe(false);
+    expect(names.has('refresh')).toBe(false);
   });
 
   it('includes members of exported interfaces', () => {
@@ -57,11 +57,11 @@ describe('api-surface', () => {
       names.add(sym.getName());
     }
 
-    expect(names.has('sheet')).toBe(true);
-    expect(names.has('row')).toBe(true);
-    expect(names.has('col')).toBe(true);
-    expect(names.has('start')).toBe(true);
-    expect(names.has('end')).toBe(true);
+    expect(names.has('ns')).toBe(true);
+    expect(names.has('x')).toBe(true);
+    expect(names.has('y')).toBe(true);
+    expect(names.has('from')).toBe(true);
+    expect(names.has('to')).toBe(true);
   });
 
   it('includes members of exported enums', () => {
@@ -74,8 +74,8 @@ describe('api-surface', () => {
       names.add(sym.getName());
     }
 
-    expect(names.has('Number')).toBe(true);
-    expect(names.has('Text')).toBe(true);
-    expect(names.has('Formula')).toBe(true);
+    expect(names.has('Alpha')).toBe(true);
+    expect(names.has('Beta')).toBe(true);
+    expect(names.has('Gamma')).toBe(true);
   });
 });

@@ -1,51 +1,51 @@
-export class DependencyGraph {
-  private adjacency: Map<string, Set<string>>;
-  private reverseAdjacency: Map<string, Set<string>>;
+export class LinkMap {
+  private forward: Map<string, Set<string>>;
+  private reverse: Map<string, Set<string>>;
 
   constructor() {
-    this.adjacency = new Map();
-    this.reverseAdjacency = new Map();
+    this.forward = new Map();
+    this.reverse = new Map();
   }
 
-  addDependency(from: string, to: string): void {
-    if (!this.adjacency.has(from)) {
-      this.adjacency.set(from, new Set());
+  connect(a: string, b: string): void {
+    if (!this.forward.has(a)) {
+      this.forward.set(a, new Set());
     }
-    this.adjacency.get(from)!.add(to);
-    if (!this.reverseAdjacency.has(to)) {
-      this.reverseAdjacency.set(to, new Set());
+    this.forward.get(a)!.add(b);
+    if (!this.reverse.has(b)) {
+      this.reverse.set(b, new Set());
     }
-    this.reverseAdjacency.get(to)!.add(from);
+    this.reverse.get(b)!.add(a);
   }
 
-  getDependents(key: string): Set<string> {
-    return this.reverseAdjacency.get(key) ?? new Set();
+  followers(key: string): Set<string> {
+    return this.reverse.get(key) ?? new Set();
   }
 
-  getDependencies(key: string): Set<string> {
-    return this.adjacency.get(key) ?? new Set();
+  targets(key: string): Set<string> {
+    return this.forward.get(key) ?? new Set();
   }
 
-  hasCycle(): boolean {
+  hasLoop(): boolean {
     const visited = new Set<string>();
-    const inStack = new Set<string>();
-    const dfs = (node: string): boolean => {
+    const stack = new Set<string>();
+    const walk = (node: string): boolean => {
       visited.add(node);
-      inStack.add(node);
-      const deps = this.adjacency.get(node) ?? new Set();
+      stack.add(node);
+      const deps = this.forward.get(node) ?? new Set();
       for (const dep of deps) {
         if (!visited.has(dep)) {
-          if (dfs(dep)) return true;
-        } else if (inStack.has(dep)) {
+          if (walk(dep)) return true;
+        } else if (stack.has(dep)) {
           return true;
         }
       }
-      inStack.delete(node);
+      stack.delete(node);
       return false;
     };
-    for (const node of this.adjacency.keys()) {
+    for (const node of this.forward.keys()) {
       if (!visited.has(node)) {
-        if (dfs(node)) return true;
+        if (walk(node)) return true;
       }
     }
     return false;

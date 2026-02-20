@@ -18,72 +18,72 @@ describe('classifier', () => {
   it('marks internal class as prefix', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    expect(prefixNames).toContain('DependencyGraph');
+    expect(prefixNames).toContain('LinkMap');
   });
 
   it('marks private members of public class as prefix', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    expect(prefixNames).toContain('CalculationEngine.graph');
-    expect(prefixNames).toContain('CalculationEngine.dirtySet');
-    expect(prefixNames).toContain('CalculationEngine.valueCache');
-    expect(prefixNames).toContain('CalculationEngine.addressToKey');
-    expect(prefixNames).toContain('CalculationEngine.markDirty');
-    expect(prefixNames).toContain('CalculationEngine.recalculate');
+    expect(prefixNames).toContain('Processor.links');
+    expect(prefixNames).toContain('Processor.pending');
+    expect(prefixNames).toContain('Processor.cache');
+    expect(prefixNames).toContain('Processor.toKey');
+    expect(prefixNames).toContain('Processor.mark');
+    expect(prefixNames).toContain('Processor.refresh');
   });
 
   it('marks internal functions as prefix', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    expect(prefixNames).toContain('hashKey');
-    expect(prefixNames).toContain('parseKey');
+    expect(prefixNames).toContain('makeKey');
+    expect(prefixNames).toContain('splitKey');
   });
 
   it('marks all members of internal class as prefix', () => {
     const result = getClassification();
     const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-    expect(prefixNames).toContain('DependencyGraph.adjacency');
-    expect(prefixNames).toContain('DependencyGraph.reverseAdjacency');
-    expect(prefixNames).toContain('DependencyGraph.addDependency');
-    expect(prefixNames).toContain('DependencyGraph.getDependents');
-    expect(prefixNames).toContain('DependencyGraph.getDependencies');
-    expect(prefixNames).toContain('DependencyGraph.hasCycle');
+    expect(prefixNames).toContain('LinkMap.forward');
+    expect(prefixNames).toContain('LinkMap.reverse');
+    expect(prefixNames).toContain('LinkMap.connect');
+    expect(prefixNames).toContain('LinkMap.followers');
+    expect(prefixNames).toContain('LinkMap.targets');
+    expect(prefixNames).toContain('LinkMap.hasLoop');
   });
 
   it('does NOT mark public class as prefix', () => {
     const result = getClassification();
     const noPrefixNames = result.willNotPrefix.map(d => d.qualifiedName);
-    expect(noPrefixNames).toContain('CalculationEngine');
+    expect(noPrefixNames).toContain('Processor');
   });
 
   it('does NOT mark public methods as prefix', () => {
     const result = getClassification();
     const noPrefixNames = result.willNotPrefix.map(d => d.qualifiedName);
-    expect(noPrefixNames).toContain('CalculationEngine.setCellValue');
-    expect(noPrefixNames).toContain('CalculationEngine.getCellValue');
+    expect(noPrefixNames).toContain('Processor.setEntry');
+    expect(noPrefixNames).toContain('Processor.getEntry');
   });
 
   it('does NOT mark exported interfaces as prefix', () => {
     const result = getClassification();
     const noPrefixNames = result.willNotPrefix.map(d => d.qualifiedName);
-    expect(noPrefixNames).toContain('CellAddress');
-    expect(noPrefixNames).toContain('CellRange');
-    expect(noPrefixNames).toContain('CellType');
+    expect(noPrefixNames).toContain('Coord');
+    expect(noPrefixNames).toContain('CoordRange');
+    expect(noPrefixNames).toContain('CoordKind');
   });
 
   it('does NOT mark exported interface members as prefix', () => {
     const result = getClassification();
     const noPrefixNames = result.willNotPrefix.map(d => d.qualifiedName);
-    expect(noPrefixNames).toContain('CellAddress.sheet');
-    expect(noPrefixNames).toContain('CellAddress.row');
-    expect(noPrefixNames).toContain('CellAddress.col');
+    expect(noPrefixNames).toContain('Coord.ns');
+    expect(noPrefixNames).toContain('Coord.x');
+    expect(noPrefixNames).toContain('Coord.y');
   });
 
   it('does NOT mark exported enum members as prefix', () => {
     const result = getClassification();
     const noPrefixNames = result.willNotPrefix.map(d => d.qualifiedName);
-    expect(noPrefixNames).toContain('CellType.Number');
-    expect(noPrefixNames).toContain('CellType.Text');
-    expect(noPrefixNames).toContain('CellType.Formula');
+    expect(noPrefixNames).toContain('CoordKind.Alpha');
+    expect(noPrefixNames).toContain('CoordKind.Beta');
+    expect(noPrefixNames).toContain('CoordKind.Gamma');
   });
 });

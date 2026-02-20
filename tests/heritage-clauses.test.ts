@@ -29,59 +29,59 @@ describe('heritage clause resolution', () => {
     return classifySymbols(program, checker, publicSymbols, [TEST_ENTRY], '_');
   }
 
-  describe('class extends (CalculationEngine extends BaseEngine)', () => {
+  describe('class extends (Processor extends BaseProcessor)', () => {
     it('discovers base class as public via heritage clause', () => {
       const names = getPublicNames();
-      // BaseEngine is not exported from barrel, but CalculationEngine extends it
-      expect(names.has('BaseEngine')).toBe(true);
+      // BaseProcessor is not exported from barrel, but Processor extends it
+      expect(names.has('BaseProcessor')).toBe(true);
     });
 
     it('discovers interface implemented by base class as public', () => {
       const names = getPublicNames();
-      // BaseEngine implements Serializable, so Serializable is public too
-      expect(names.has('Serializable')).toBe(true);
+      // BaseProcessor implements Stringable, so Stringable is public too
+      expect(names.has('Stringable')).toBe(true);
     });
 
     it('discovers public members of base class as public', () => {
       const names = getPublicNames();
-      // BaseEngine.serialize() is public, inherited by CalculationEngine
-      expect(names.has('serialize')).toBe(true);
-      // BaseEngine.engineId is protected, visible to subclass consumers
-      expect(names.has('engineId')).toBe(true);
+      // BaseProcessor.stringify() is public, inherited by Processor
+      expect(names.has('stringify')).toBe(true);
+      // BaseProcessor.instanceId is protected, visible to subclass consumers
+      expect(names.has('instanceId')).toBe(true);
     });
 
     it('does NOT prefix base class since it leaks through heritage', () => {
       const result = getClassification();
       const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-      expect(prefixNames).not.toContain('BaseEngine');
+      expect(prefixNames).not.toContain('BaseProcessor');
     });
 
-    it('does NOT prefix Serializable.serialize since it leaks through heritage', () => {
+    it('does NOT prefix Stringable.stringify since it leaks through heritage', () => {
       const result = getClassification();
       const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-      expect(prefixNames).not.toContain('Serializable');
-      expect(prefixNames).not.toContain('Serializable.serialize');
+      expect(prefixNames).not.toContain('Stringable');
+      expect(prefixNames).not.toContain('Stringable.stringify');
     });
   });
 
-  describe('interface extends (CellAddress extends Identifiable)', () => {
+  describe('interface extends (Coord extends Taggable)', () => {
     it('discovers base interface as public via heritage clause', () => {
       const names = getPublicNames();
-      // Identifiable is not exported from barrel, but CellAddress extends it
-      expect(names.has('Identifiable')).toBe(true);
+      // Taggable is not exported from barrel, but Coord extends it
+      expect(names.has('Taggable')).toBe(true);
     });
 
     it('discovers base interface members as public', () => {
       const names = getPublicNames();
-      // Identifiable.id should be public since CellAddress inherits it
-      expect(names.has('id')).toBe(true);
+      // Taggable.tag should be public since Coord inherits it
+      expect(names.has('tag')).toBe(true);
     });
 
     it('does NOT prefix base interface or its members', () => {
       const result = getClassification();
       const prefixNames = result.willPrefix.map(d => d.qualifiedName);
-      expect(prefixNames).not.toContain('Identifiable');
-      expect(prefixNames).not.toContain('Identifiable.id');
+      expect(prefixNames).not.toContain('Taggable');
+      expect(prefixNames).not.toContain('Taggable.tag');
     });
   });
 
@@ -100,10 +100,10 @@ describe('heritage clause resolution', () => {
 
       expect(result.validationErrors).toBeUndefined();
 
-      // engine.ts should still reference BaseEngine (not _BaseEngine)
+      // engine.ts should still reference BaseProcessor (not _BaseProcessor)
       const engineContent = fs.readFileSync(path.join(outDir, 'src', 'engine.ts'), 'utf-8');
-      expect(engineContent).toContain('extends BaseEngine');
-      expect(engineContent).not.toContain('extends _BaseEngine');
+      expect(engineContent).toContain('extends BaseProcessor');
+      expect(engineContent).not.toContain('extends _BaseProcessor');
 
       fs.rmSync(outDir, { recursive: true, force: true });
     });

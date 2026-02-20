@@ -1,22 +1,22 @@
 // Internal base class — NOT exported from barrel
-// But CalculationEngine extends it, so it should become public via heritage clause
-export interface Serializable {
-  serialize(): string;
+// But Processor extends it, so it becomes public via heritage clause
+export interface Stringable {
+  stringify(): string;
 }
 
-export class BaseEngine implements Serializable {
-  protected engineId: string;
+export class BaseProcessor implements Stringable {
+  protected instanceId: string;
 
   constructor() {
-    this.engineId = Math.random().toString(36);
+    this.instanceId = Math.random().toString(36);
   }
 
-  serialize(): string {
-    return JSON.stringify({ engineId: this.engineId });
+  stringify(): string {
+    return JSON.stringify({ instanceId: this.instanceId });
   }
 }
 
 // Internal interface extended by an exported interface
-export interface Identifiable {
-  id: string;
+export interface Taggable {
+  tag: string;
 }

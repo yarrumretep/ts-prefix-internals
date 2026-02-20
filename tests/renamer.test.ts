@@ -23,37 +23,37 @@ describe('renamer', () => {
     expect(result.outputFiles.size).toBeGreaterThan(0);
   });
 
-  it('prefixes DependencyGraph class name', () => {
+  it('prefixes LinkMap class name', () => {
     const result = getRenames();
     const graphFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('graph.ts'));
     expect(graphFile).toBeDefined();
     const [, content] = graphFile!;
-    expect(content).toContain('class _DependencyGraph');
-    expect(content).not.toMatch(/class DependencyGraph\b/);
+    expect(content).toContain('class _LinkMap');
+    expect(content).not.toMatch(/class LinkMap\b/);
   });
 
-  it('prefixes private members of CalculationEngine', () => {
+  it('prefixes private members of Processor', () => {
     const result = getRenames();
     const engineFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('engine.ts'));
     expect(engineFile).toBeDefined();
     const [, content] = engineFile!;
-    expect(content).toContain('_graph');
-    expect(content).toContain('_dirtySet');
-    expect(content).toContain('_valueCache');
-    expect(content).toContain('_addressToKey');
-    expect(content).toContain('_markDirty');
-    expect(content).toContain('_recalculate');
+    expect(content).toContain('_links');
+    expect(content).toContain('_pending');
+    expect(content).toContain('_cache');
+    expect(content).toContain('_toKey');
+    expect(content).toContain('_mark');
+    expect(content).toContain('_refresh');
   });
 
-  it('does NOT prefix public methods of CalculationEngine', () => {
+  it('does NOT prefix public methods of Processor', () => {
     const result = getRenames();
     const engineFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('engine.ts'));
     expect(engineFile).toBeDefined();
     const [, content] = engineFile!;
-    expect(content).toContain('setCellValue');
-    expect(content).toContain('getCellValue');
-    expect(content).not.toContain('_setCellValue');
-    expect(content).not.toContain('_getCellValue');
+    expect(content).toContain('setEntry');
+    expect(content).toContain('getEntry');
+    expect(content).not.toContain('_setEntry');
+    expect(content).not.toContain('_getEntry');
   });
 
   it('does NOT modify exported interface members', () => {
@@ -61,20 +61,20 @@ describe('renamer', () => {
     const typesFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('types.ts'));
     expect(typesFile).toBeDefined();
     const [, content] = typesFile!;
-    expect(content).toContain('sheet:');
-    expect(content).toContain('row:');
-    expect(content).toContain('col:');
-    expect(content).not.toContain('_sheet');
-    expect(content).not.toContain('_row');
-    expect(content).not.toContain('_col');
+    expect(content).toContain('ns:');
+    expect(content).toContain('x:');
+    expect(content).toContain('y:');
+    expect(content).not.toContain('_ns');
+    expect(content).not.toContain('_x');
+    expect(content).not.toContain('_y');
   });
 
-  it('updates import of DependencyGraph in engine.ts', () => {
+  it('updates import of LinkMap in engine.ts', () => {
     const result = getRenames();
     const engineFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('engine.ts'));
     expect(engineFile).toBeDefined();
     const [, content] = engineFile!;
-    expect(content).toContain('_DependencyGraph');
+    expect(content).toContain('_LinkMap');
   });
 
   it('prefixes internal utility functions', () => {
@@ -82,7 +82,7 @@ describe('renamer', () => {
     const utilsFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('utils.ts'));
     expect(utilsFile).toBeDefined();
     const [, content] = utilsFile!;
-    expect(content).toContain('function _hashKey');
-    expect(content).toContain('function _parseKey');
+    expect(content).toContain('function _makeKey');
+    expect(content).toContain('function _splitKey');
   });
 });
