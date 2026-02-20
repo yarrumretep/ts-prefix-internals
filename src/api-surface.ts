@@ -51,8 +51,8 @@ export function discoverPublicApiSurface(
 
           if (decl.heritageClauses) {
             for (const clause of decl.heritageClauses) {
-              for (const typeNode of clause.types) {
-                walkTypeNode(typeNode);
+              for (const exprWithType of clause.types) {
+                walkHeritageExpression(exprWithType);
               }
             }
           }
@@ -72,8 +72,8 @@ export function discoverPublicApiSurface(
       for (const decl of decls) {
         if (ts.isInterfaceDeclaration(decl) && decl.heritageClauses) {
           for (const clause of decl.heritageClauses) {
-            for (const typeNode of clause.types) {
-              walkTypeNode(typeNode);
+            for (const exprWithType of clause.types) {
+              walkHeritageExpression(exprWithType);
             }
           }
         }
@@ -87,6 +87,18 @@ export function discoverPublicApiSurface(
           publicSymbols.add(memberSymbol);
           visited.add(memberSymbol);
         });
+      }
+    }
+  }
+
+  function walkHeritageExpression(node: ts.ExpressionWithTypeArguments): void {
+    // ExpressionWithTypeArguments is not a TypeReferenceNode, so resolve the symbol directly
+    const symbol = checker.getSymbolAtLocation(node.expression);
+    if (symbol) addSymbol(symbol);
+    // Walk type arguments (e.g., `extends Base<T>`)
+    if (node.typeArguments) {
+      for (const arg of node.typeArguments) {
+        walkTypeNode(arg);
       }
     }
   }
@@ -110,6 +122,23 @@ export function discoverPublicApiSurface(
           if (tp.constraint) walkTypeNode(tp.constraint);
           if (tp.default) walkTypeNode(tp.default);
         }
+      }
+    }
+
+    // Constructor declarations (parameter types contribute to public API)
+    if (ts.isConstructorDeclaration(node)) {
+      for (const param of node.parameters) {
+        if (param.type) walkTypeNode(param.type);
+      }
+    }
+
+    // Getter/setter accessors
+    if (ts.isGetAccessorDeclaration(node)) {
+      if (node.type) walkTypeNode(node.type);
+    }
+    if (ts.isSetAccessorDeclaration(node)) {
+      for (const param of node.parameters) {
+        if (param.type) walkTypeNode(param.type);
       }
     }
 
