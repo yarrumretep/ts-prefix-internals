@@ -1,6 +1,6 @@
 {
   "name": "ts-prefix-internals",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript symbol prefixer for aggressive minification — prefix internal symbols with _ so terser/esbuild can mangle them via mangleProps: /^_/",
   "type": "module",
   "main": "dist/index.js",
