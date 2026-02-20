@@ -53,7 +53,7 @@ export function computeRenames(
     if (targetFile === undefined || targetPos === undefined) continue;
 
     const locations = languageService.findRenameLocations(
-      targetFile, targetPos, false, false, false
+      targetFile, targetPos, false, false, true
     );
 
     if (!locations) {
@@ -62,11 +62,16 @@ export function computeRenames(
     }
 
     for (const loc of locations) {
+      // TypeScript's Language Service provides prefixText/suffixText when
+      // renaming a shorthand property requires expansion.  For example,
+      // renaming the property `model` to `__model` in `return { model }`
+      // yields suffixText ": model" so the output becomes `{ __model: model }`.
+      // Similarly, `const { model } = ...` may yield prefixText "model: ".
       allEdits.push({
         fileName: loc.fileName,
         start: loc.textSpan.start,
         length: loc.textSpan.length,
-        newText: newName,
+        newText: (loc.prefixText ?? '') + newName + (loc.suffixText ?? ''),
       });
     }
   }

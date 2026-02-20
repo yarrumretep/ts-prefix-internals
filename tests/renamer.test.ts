@@ -85,4 +85,32 @@ describe('renamer', () => {
     expect(content).toContain('function _makeKey');
     expect(content).toContain('function _splitKey');
   });
+
+  it('expands shorthand properties when property is prefixed but local variable is not', () => {
+    const result = getRenames();
+    const builderFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('builder.ts'));
+    expect(builderFile).toBeDefined();
+    const [, content] = builderFile!;
+
+    // The return statement `return { graph, nodeCount }` must expand to
+    // `return { _graph: graph, _nodeCount: nodeCount }` because the interface
+    // properties are prefixed but the local variables keep their original names.
+    expect(content).toContain('_graph: graph');
+    expect(content).toContain('_nodeCount: nodeCount');
+
+    // The local variable declarations should NOT be prefixed
+    expect(content).toMatch(/const graph = new _LinkMap/);
+    expect(content).toMatch(/const nodeCount = pairs\.length/);
+  });
+
+  it('expands shorthand destructuring when property is prefixed but binding is not', () => {
+    const result = getRenames();
+    const builderFile = [...result.outputFiles.entries()].find(([k]) => k.endsWith('builder.ts'));
+    expect(builderFile).toBeDefined();
+    const [, content] = builderFile!;
+
+    // `const { nodeCount } = createGraphSetup(...)` should expand to
+    // `const { _nodeCount: nodeCount } = ...` so the local binding keeps its name.
+    expect(content).toContain('_nodeCount: nodeCount');
+  });
 });
