@@ -185,6 +185,35 @@ Or as package.json scripts:
 }
 ```
 
+## Releasing
+
+```bash
+# patch release (default)
+npm run release
+
+# minor/major/prerelease
+npm run release -- minor
+```
+
+Release script behavior:
+
+1. Verifies you're on `main` and the working tree is clean
+2. Runs tests
+3. Bumps version with `npm version`
+4. Pushes branch + tag
+
+Publishing behavior:
+
+- Tag pushes matching `v*` trigger `.github/workflows/publish.yml`
+- Workflow builds/tests, verifies tag version matches `package.json`, publishes to npm, and creates a GitHub Release
+- Prerelease versions (for example `1.2.0-beta.1`) publish with npm dist-tag `next`
+
+One-time setup:
+
+1. In npm, configure a Trusted Publisher for this GitHub repo and workflow file
+2. In GitHub, create environment `npm-release` and optionally require reviewers / restrict tags
+3. Protect release tags (for example `v*`) with a GitHub ruleset so only maintainers can create them
+
 ## Safety
 
 - Uses the TypeScript Language Service for renaming (not regex/text replacement)
