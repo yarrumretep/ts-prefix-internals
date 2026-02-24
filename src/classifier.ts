@@ -1,10 +1,10 @@
 import ts from 'typescript';
-import type { RenameDecision } from './config.js';
+import type { RenameDecision, Diagnostic } from './config.js';
 
 export interface ClassificationResult {
   willPrefix: RenameDecision[];
   willNotPrefix: RenameDecision[];
-  warnings: string[];
+  diagnostics: Diagnostic[];
   symbolsToRename: Map<ts.Symbol, string>; // symbol -> new name
 }
 
@@ -17,7 +17,7 @@ export function classifySymbols(
 ): ClassificationResult {
   const willPrefix: RenameDecision[] = [];
   const willNotPrefix: RenameDecision[] = [];
-  const warnings: string[] = [];
+  const diagnostics: Diagnostic[] = [];
   const symbolsToRename = new Map<ts.Symbol, string>();
   const processed = new Set<ts.Symbol>();
 
@@ -301,21 +301,83 @@ export function classifySymbols(
     }
   }
 
+  const renamedNames = new Set<string>();
+  for (const [sym] of symbolsToRename) {
+    renamedNames.add(sym.getName());
+  }
+
   function detectDynamicAccess(sf: ts.SourceFile): void {
     function visit(node: ts.Node): void {
       if (ts.isElementAccessExpression(node)) {
         const arg = node.argumentExpression;
-        // Non-string-literal argument means dynamic access
-        if (!ts.isStringLiteral(arg) && !ts.isNoSubstitutionTemplateLiteral(arg)) {
-          const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
-          warnings.push(
-            `Dynamic property access at ${sf.fileName}:${line + 1} - may break after prefixing`
-          );
+
+        // String literals (obj["foo"]) are handled by the renamer — skip
+        if (ts.isStringLiteral(arg) || ts.isNoSubstitutionTemplateLiteral(arg)) {
+          ts.forEachChild(node, visit);
+          return;
         }
+
+        // Check if the object is an array/tuple — suppress entirely
+        const objectType = checker.getTypeAtLocation(node.expression);
+        if (
+          checker.isArrayType(objectType) ||
+          checker.isTupleType(objectType) ||
+          objectType.getNumberIndexType() !== undefined
+        ) {
+          ts.forEachChild(node, visit);
+          return;
+        }
+
+        const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
+        const shortFile = sf.fileName.replace(/.*[/\\]/, '');
+
+        // Check if the argument has a string literal type that matches a renamed symbol
+        const argType = checker.getTypeAtLocation(arg);
+        const literalNames = collectStringLiterals(argType);
+
+        if (literalNames.length > 0) {
+          const hits = literalNames.filter(n => renamedNames.has(n));
+          if (hits.length > 0) {
+            diagnostics.push({
+              level: 'error',
+              message: `Dynamic access to prefixed property '${hits.join("', '")}' at ${shortFile}:${line + 1} will break after renaming`,
+              file: sf.fileName,
+              line: line + 1,
+            });
+            ts.forEachChild(node, visit);
+            return;
+          }
+        }
+
+        // Fall through: warn on unresolvable dynamic access
+        diagnostics.push({
+          level: 'warn',
+          message: `Dynamic property access at ${shortFile}:${line + 1} — may break after prefixing`,
+          file: sf.fileName,
+          line: line + 1,
+        });
       }
       ts.forEachChild(node, visit);
     }
     ts.forEachChild(sf, visit);
+  }
+
+  function collectStringLiterals(type: ts.Type): string[] {
+    if (type.isStringLiteral()) {
+      return [type.value];
+    }
+    if (type.isUnion()) {
+      const results: string[] = [];
+      for (const member of type.types) {
+        if (member.isStringLiteral()) {
+          results.push(member.value);
+        }
+      }
+      if (results.length === type.types.length) {
+        return results;
+      }
+    }
+    return [];
   }
 
   // Walk all source files in the program
@@ -419,5 +481,5 @@ export function classifySymbols(
     });
   }
 
-  return { willPrefix, willNotPrefix, warnings, symbolsToRename };
+  return { willPrefix, willNotPrefix, diagnostics, symbolsToRename };
 }

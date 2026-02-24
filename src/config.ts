@@ -8,6 +8,7 @@ export interface PrefixConfig {
   dryRun: boolean;
   verbose: boolean;
   skipValidation: boolean;
+  force: boolean;
 }
 
 export const DEFAULT_PREFIX = '_';
@@ -20,6 +21,7 @@ export function parseArgs(args: string[]): PrefixConfig {
   let dryRun = false;
   let verbose = false;
   let skipValidation = false;
+  let force = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -36,6 +38,7 @@ Options:
       --dry-run             Report what would be renamed without writing files
       --verbose             Print every rename decision with reasoning
       --skip-validation     Skip post-rename type-check
+      --force               Continue despite dynamic-access errors (exit 0)
   -h, --help                Show this help message
 
 Example:
@@ -65,6 +68,9 @@ Example:
       case '--skip-validation':
         skipValidation = true;
         break;
+      case '--force':
+        force = true;
+        break;
       default:
         if (arg.startsWith('-')) {
           throw new Error(`Unknown option: ${arg}`);
@@ -84,6 +90,7 @@ Example:
     dryRun,
     verbose,
     skipValidation,
+    force,
   };
 }
 
@@ -97,9 +104,16 @@ export interface RenameDecision {
   reason: string;
 }
 
+export interface Diagnostic {
+  level: 'error' | 'warn';
+  message: string;
+  file: string;
+  line: number;
+}
+
 export interface PrefixResult {
   willPrefix: RenameDecision[];
   willNotPrefix: RenameDecision[];
-  warnings: string[];
+  diagnostics: Diagnostic[];
   outputFiles: Map<string, string>;
 }

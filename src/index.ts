@@ -1,13 +1,13 @@
 import ts from 'typescript';
 import path from 'node:path';
 import fs from 'node:fs';
-import { PrefixConfig, PrefixResult, RenameDecision } from './config.js';
+import { PrefixConfig, PrefixResult, Diagnostic, RenameDecision } from './config.js';
 import { createProgramFromConfig, createLanguageService } from './program.js';
 import { discoverPublicApiSurface } from './api-surface.js';
 import { classifySymbols } from './classifier.js';
 import { computeRenames } from './renamer.js';
 
-export { type PrefixConfig, type PrefixResult, type RenameDecision, parseArgs } from './config.js';
+export { type PrefixConfig, type PrefixResult, type Diagnostic, type RenameDecision, parseArgs } from './config.js';
 
 export interface FullResult extends PrefixResult {
   validationErrors?: string[];
@@ -30,7 +30,7 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
     return {
       willPrefix: classification.willPrefix,
       willNotPrefix: classification.willNotPrefix,
-      warnings: classification.warnings,
+      diagnostics: classification.diagnostics,
       outputFiles: new Map(),
     };
   }
@@ -38,7 +38,15 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
   // 4. Compute renames
   const ls = createLanguageService(program);
   const renameResult = computeRenames(ls, program, classification.symbolsToRename, publicApiSymbols);
-  const warnings = [...classification.warnings, ...renameResult.errors];
+  const diagnostics: Diagnostic[] = [
+    ...classification.diagnostics,
+    ...renameResult.errors.map(msg => ({
+      level: 'warn' as const,
+      message: msg,
+      file: '',
+      line: 0,
+    })),
+  ];
 
   // 5. Write output files
   const projectDir = path.dirname(path.resolve(projectPath));
@@ -69,7 +77,7 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
   return {
     willPrefix: classification.willPrefix,
     willNotPrefix: classification.willNotPrefix,
-    warnings,
+    diagnostics,
     outputFiles: renameResult.outputFiles,
     validationErrors,
   };

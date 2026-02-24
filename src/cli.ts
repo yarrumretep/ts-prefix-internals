@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { parseArgs, RenameDecision } from './config.js';
+import { parseArgs, RenameDecision, Diagnostic } from './config.js';
 import { prefixInternals } from './index.js';
 
-function formatDryRun(willPrefix: RenameDecision[], willNotPrefix: RenameDecision[], warnings: string[]): string {
+function formatDryRun(willPrefix: RenameDecision[], willNotPrefix: RenameDecision[], diagnostics: Diagnostic[]): string {
   const lines: string[] = [];
 
   lines.push('WILL PREFIX (internal):');
@@ -18,11 +18,22 @@ function formatDryRun(willPrefix: RenameDecision[], willNotPrefix: RenameDecisio
     lines.push(`  ${d.qualifiedName}${' '.repeat(pad)}${d.kind.padEnd(12)} ${d.fileName}:${d.line}    (${d.reason})`);
   }
 
-  if (warnings.length > 0) {
+  const errors = diagnostics.filter(d => d.level === 'error');
+  const warns = diagnostics.filter(d => d.level === 'warn');
+
+  if (errors.length > 0) {
     lines.push('');
-    lines.push('WARNINGS:');
-    for (const w of warnings) {
-      lines.push(`  ${w}`);
+    lines.push(`ERRORS (${errors.length}):`);
+    for (const e of errors) {
+      lines.push(`  ${e.message}`);
+    }
+  }
+
+  if (warns.length > 0) {
+    lines.push('');
+    lines.push(`WARNINGS (${warns.length}):`);
+    for (const w of warns) {
+      lines.push(`  ${w.message}`);
     }
   }
 
@@ -40,16 +51,31 @@ async function main() {
     const result = await prefixInternals(config);
 
     if (config.dryRun) {
-      console.log(formatDryRun(result.willPrefix, result.willNotPrefix, result.warnings));
+      console.log(formatDryRun(result.willPrefix, result.willNotPrefix, result.diagnostics));
+      const errors = result.diagnostics.filter(d => d.level === 'error');
+      if (errors.length > 0 && !config.force) {
+        process.exit(1);
+      }
     } else {
       console.log(`Prefixed ${result.willPrefix.length} symbols.`);
       console.log(`Skipped ${result.willNotPrefix.length} public API symbols.`);
-      if (result.warnings.length > 0) {
-        console.log(`\nWarnings (${result.warnings.length}):`);
-        for (const w of result.warnings) {
-          console.log(`  ${w}`);
+
+      const errors = result.diagnostics.filter(d => d.level === 'error');
+      const warns = result.diagnostics.filter(d => d.level === 'warn');
+
+      if (errors.length > 0) {
+        console.error(`\nErrors (${errors.length}):`);
+        for (const e of errors) {
+          console.error(`  ${e.message}`);
         }
       }
+      if (warns.length > 0) {
+        console.log(`\nWarnings (${warns.length}):`);
+        for (const w of warns) {
+          console.log(`  ${w.message}`);
+        }
+      }
+
       if (result.validationErrors) {
         console.error(`\nValidation errors (${result.validationErrors.length}):`);
         for (const e of result.validationErrors) {
@@ -59,6 +85,12 @@ async function main() {
       } else if (!config.skipValidation) {
         console.log('\nOutput compiles successfully.');
       }
+
+      if (errors.length > 0 && !config.force) {
+        console.error('\nDynamic access errors detected. Use --force to proceed anyway.');
+        process.exit(1);
+      }
+
       console.log(`\nOutput written to: ${config.outDir}`);
     }
   } catch (err: any) {
