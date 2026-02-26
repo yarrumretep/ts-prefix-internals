@@ -32,6 +32,14 @@ export function computeRenames(
     const direct = symbolsToRename.get(symbol);
     if (direct !== undefined) return direct;
     if (symbol.flags & ts.SymbolFlags.Alias) {
+      // If alias was created by an import/export specifier with an `as` clause,
+      // the local name is decoupled from the imported name — don't follow the chain.
+      // e.g., `import { buildModel as buildModelImpl }` — buildModelImpl references
+      // should NOT be renamed even though buildModel is being renamed.
+      const decl = symbol.declarations?.[0];
+      if (decl && (ts.isImportSpecifier(decl) || ts.isExportSpecifier(decl)) && decl.propertyName) {
+        return undefined;
+      }
       try { return symbolsToRename.get(checker.getAliasedSymbol(symbol)); }
       catch { return undefined; }
     }
@@ -522,6 +530,54 @@ export function computeRenames(
         return;
       }
 
+      // --- Case E4: JSX attribute — <Component propName={value} /> ---
+      if (ts.isJsxAttribute(node) && ts.isIdentifier(node.name)) {
+        const propName = node.name.text;
+        const pos = node.name.getStart();
+        const key = `${sf.fileName}:${pos}`;
+
+        if (!editedPositions.has(key)) {
+          // Try direct symbol lookup first
+          const sym = checker.getSymbolAtLocation(node.name);
+          const directNewName = sym ? getNewName(sym) : undefined;
+
+          if (directNewName !== undefined) {
+            allEdits.push({ fileName: sf.fileName, start: pos, length: propName.length, newText: directNewName });
+            editedPositions.add(key);
+          } else {
+            // Fallback: name-based lookup via component props type
+            const newName = renamedPropNames.get(propName);
+            if (newName !== undefined) {
+              const jsxElement = node.parent?.parent; // JsxAttributes → JsxOpeningElement/JsxSelfClosingElement
+              if (jsxElement && (ts.isJsxOpeningElement(jsxElement) || ts.isJsxSelfClosingElement(jsxElement))) {
+                const propsType = checker.getContextualType(node.parent as ts.Expression) ??
+                  ((): ts.Type | undefined => {
+                    const tagSym = checker.getSymbolAtLocation(jsxElement.tagName);
+                    if (!tagSym) return undefined;
+                    const tagType = checker.getTypeOfSymbolAtLocation(tagSym, jsxElement);
+                    const callSigs = tagType.getCallSignatures();
+                    if (callSigs.length > 0) return callSigs[0].getParameters()[0]
+                      ? checker.getTypeOfSymbolAtLocation(callSigs[0].getParameters()[0], jsxElement)
+                      : undefined;
+                    return undefined;
+                  })();
+                if (propsType) {
+                  const prop = getPropertyFromType(propsType, propName);
+                  if (prop && isProjectProperty(prop) && !isPublicApiSymbol(prop)) {
+                    allEdits.push({ fileName: sf.fileName, start: pos, length: propName.length, newText: newName });
+                    editedPositions.add(key);
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        // Visit initializer but skip the name
+        if (node.initializer) visit(node.initializer);
+        return;
+      }
+
       // --- Case F: Generic identifiers ---
       if (ts.isIdentifier(node)) {
         const parent = node.parent;
@@ -531,6 +587,7 @@ export function computeRenames(
         if (ts.isPropertyAssignment(parent) && node === parent.name) return;
         if (ts.isShorthandPropertyAssignment(parent) && node === parent.name) return;
         if (ts.isBindingElement(parent) && (node === parent.propertyName || node === parent.name)) return;
+        if (ts.isJsxAttribute(parent) && node === parent.name) return;
 
         // Skip `default` keyword used as propertyName in import/export specifiers
         // — it refers to the module's default export and can't be renamed
