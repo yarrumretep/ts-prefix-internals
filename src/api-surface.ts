@@ -80,6 +80,36 @@ export function discoverPublicApiSurface(
       }
     }
 
+    // Handle type alias members (e.g., type Foo = z.infer<...>)
+    if (symbol.flags & ts.SymbolFlags.TypeAlias) {
+      const decls = symbol.getDeclarations() ?? [];
+      for (const decl of decls) {
+        if (ts.isTypeAliasDeclaration(decl) && decl.type) {
+          const type = checker.getTypeFromTypeNode(decl.type);
+          if (type) {
+            walkTypeProperties(type);
+          }
+        }
+      }
+    }
+
+    // Handle union/intersection types by walking each branch
+    function walkTypeProperties(type: ts.Type): void {
+      // Always add properties at this level (for unions, these are synthetic
+      // symbols for common members — the ones the type checker resolves when
+      // you do obj.prop on the union type itself).
+      for (const prop of type.getProperties()) {
+        publicSymbols.add(prop);
+      }
+      // Also walk individual union/intersection branches so branch-specific
+      // properties are marked too (e.g., narrowed access after a type guard).
+      if (type.isUnion() || type.isIntersection()) {
+        for (const member of type.types) {
+          walkTypeProperties(member);
+        }
+      }
+    }
+
     // Handle enum members
     if (symbol.flags & ts.SymbolFlags.Enum) {
       if (symbol.exports) {
