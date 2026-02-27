@@ -406,7 +406,7 @@ export function classifySymbols(
     renamedNames.add(sym.getName());
   }
 
-  function detectDynamicAccess(sf: ts.SourceFile): void {
+  function detectDynamicAccess(sf: ts.SourceFile, suppressed: Set<number>): void {
     function visit(node: ts.Node): void {
       if (ts.isElementAccessExpression(node)) {
         const arg = node.argumentExpression;
@@ -429,6 +429,10 @@ export function classifySymbols(
         }
 
         const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
+        if (suppressed.has(line + 1)) {
+          ts.forEachChild(node, visit);
+          return;
+        }
         const shortFile = sf.fileName.replace(/.*[/\\]/, '');
 
         // Check if the argument has a string literal type that matches a renamed symbol
@@ -481,7 +485,7 @@ export function classifySymbols(
   }
 
   // Unsafe pattern detection — runs AFTER classification alongside dynamic access detection
-  function detectUnsafePatterns(sf: ts.SourceFile): void {
+  function detectUnsafePatterns(sf: ts.SourceFile, suppressed: Set<number>): void {
 
     // Resolve the source type for an ObjectBindingPattern.
     function getDestructuringSourceType(pattern: ts.ObjectBindingPattern): ts.Type | undefined {
@@ -540,6 +544,7 @@ export function classifySymbols(
       if (hitProps.length === 0) return;
 
       const { line } = sf.getLineAndCharacterOfPosition(pattern.getStart());
+      if (suppressed.has(line + 1)) return;
       const shortFile = sf.fileName.replace(/.*[/\\]/, '');
       const names = hitProps.join("', '");
 
@@ -569,6 +574,7 @@ export function classifySymbols(
       if (hits.length === 0) return;
 
       const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
+      if (suppressed.has(line + 1)) return;
       const shortFile = sf.fileName.replace(/.*[/\\]/, '');
 
       diagnostics.push({
@@ -591,10 +597,43 @@ export function classifySymbols(
     ts.forEachChild(sf, visit);
   }
 
+  function getSuppressedLines(sf: ts.SourceFile): Set<number> {
+    const suppressed = new Set<number>();
+    const text = sf.getFullText();
+
+    // Single-line: // ts-prefix-suppress-warnings → suppresses next line
+    const singleRe = /\/\/\s*ts-prefix-suppress-warnings\s*$/gm;
+    let match: RegExpExecArray | null;
+    while ((match = singleRe.exec(text)) !== null) {
+      // Only match bare "ts-prefix-suppress-warnings" (not -start or -end)
+      if (/ts-prefix-suppress-warnings-(start|end)/.test(match[0])) continue;
+      const { line } = sf.getLineAndCharacterOfPosition(match.index);
+      suppressed.add(line + 2); // suppress the *next* line (1-indexed)
+    }
+
+    // Block: // ts-prefix-suppress-warnings-start ... // ts-prefix-suppress-warnings-end
+    const startRe = /\/\/\s*ts-prefix-suppress-warnings-start\b/g;
+    const endRe = /\/\/\s*ts-prefix-suppress-warnings-end\b/g;
+    while ((match = startRe.exec(text)) !== null) {
+      const startLine = sf.getLineAndCharacterOfPosition(match.index).line;
+      endRe.lastIndex = match.index;
+      const endMatch = endRe.exec(text);
+      const endLine = endMatch
+        ? sf.getLineAndCharacterOfPosition(endMatch.index).line
+        : sf.getLineAndCharacterOfPosition(text.length).line;
+      for (let l = startLine + 1; l <= endLine + 1; l++) {
+        suppressed.add(l + 1); // 1-indexed
+      }
+    }
+
+    return suppressed;
+  }
+
   for (const sf of program.getSourceFiles()) {
     if (!isProjectSourceFile(sf)) continue;
-    detectDynamicAccess(sf);
-    detectUnsafePatterns(sf);
+    const suppressed = getSuppressedLines(sf);
+    detectDynamicAccess(sf, suppressed);
+    detectUnsafePatterns(sf, suppressed);
   }
 
   return { willPrefix, willNotPrefix, diagnostics, symbolsToRename };

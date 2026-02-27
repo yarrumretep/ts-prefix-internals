@@ -44,6 +44,10 @@ Options:
       --strict              Treat warnings as errors (fail on unsafe patterns)
   -h, --help                Show this help message
 
+Suppression:
+  // ts-prefix-suppress-warnings           suppress warning on the next line
+  // ts-prefix-suppress-warnings-start ... // ts-prefix-suppress-warnings-end   suppress a block
+
 Example:
   ts-prefix-internals -p tsconfig.json -e src/index.ts -o .mangled --dry-run`);
         process.exit(0);

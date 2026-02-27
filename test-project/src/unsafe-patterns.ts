@@ -50,7 +50,44 @@ function applyMappingConfig(
   return { ...config, [key]: value };
 }
 
+// --- Pattern 4: Suppressed patterns (should NOT produce warnings) ---
+// ts-prefix-suppress-warnings
+function configureMappingSuppressed({
+  forward = true,
+  reverse = false,
+}: {
+  forward?: boolean;
+  reverse?: boolean;
+} = {}): string {
+  return forward ? 'fwd' : reverse ? 'rev' : 'none';
+}
+
+function applyMappingConfigSuppressed(
+  config: MappingConfig,
+  key: keyof MappingConfig,
+  value: boolean,
+): MappingConfig {
+  // ts-prefix-suppress-warnings
+  return { ...config, [key]: value };
+}
+
+// --- Pattern 5: Block suppression ---
+// ts-prefix-suppress-warnings-start
+function blockSuppressedConfig({
+  forward = true,
+  reverse = false,
+}: {
+  forward?: boolean;
+  reverse?: boolean;
+} = {}): MappingConfig {
+  return { [('forward' as keyof MappingConfig)]: forward, [('reverse' as keyof MappingConfig)]: reverse };
+}
+// ts-prefix-suppress-warnings-end
+
 // Suppress unused warnings
+void blockSuppressedConfig;
 void configureMapping;
 void MappingHelper;
 void applyMappingConfig;
+void configureMappingSuppressed;
+void applyMappingConfigSuppressed;

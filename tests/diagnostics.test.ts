@@ -80,5 +80,11 @@ describe('dynamic access diagnostics', () => {
       expect(computed[0].message).toContain('forward');
       expect(computed[0].level).toBe('warn');
     });
+
+    it('does NOT warn about patterns with // ts-prefix-suppress-warnings on the preceding line', () => {
+      const diags = diagnosticsForFile('unsafe-patterns.ts');
+      // Only the 3 un-suppressed patterns should emit warnings; the 2 suppressed ones should not
+      expect(diags).toHaveLength(3);
+    });
   });
 });
