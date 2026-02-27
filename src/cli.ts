@@ -50,9 +50,14 @@ async function main() {
 
     const result = await prefixInternals(config);
 
+    // In strict mode, escalate warnings to errors
+    const effectiveDiags = config.strict
+      ? result.diagnostics.map(d => d.level === 'warn' ? { ...d, level: 'error' as const } : d)
+      : result.diagnostics;
+
     if (config.dryRun) {
-      console.log(formatDryRun(result.willPrefix, result.willNotPrefix, result.diagnostics));
-      const errors = result.diagnostics.filter(d => d.level === 'error');
+      console.log(formatDryRun(result.willPrefix, result.willNotPrefix, effectiveDiags));
+      const errors = effectiveDiags.filter(d => d.level === 'error');
       if (errors.length > 0 && !config.force) {
         process.exit(1);
       }
@@ -60,8 +65,8 @@ async function main() {
       console.log(`Prefixed ${result.willPrefix.length} symbols.`);
       console.log(`Skipped ${result.willNotPrefix.length} public API symbols.`);
 
-      const errors = result.diagnostics.filter(d => d.level === 'error');
-      const warns = result.diagnostics.filter(d => d.level === 'warn');
+      const errors = effectiveDiags.filter(d => d.level === 'error');
+      const warns = effectiveDiags.filter(d => d.level === 'warn');
 
       if (errors.length > 0) {
         console.error(`\nErrors (${errors.length}):`);
@@ -87,7 +92,11 @@ async function main() {
       }
 
       if (errors.length > 0 && !config.force) {
-        console.error('\nDynamic access errors detected. Use --force to proceed anyway.');
+        if (config.strict) {
+          console.error('\nStrict mode: warnings treated as errors. Use --force to proceed anyway.');
+        } else {
+          console.error('\nDynamic access errors detected. Use --force to proceed anyway.');
+        }
         process.exit(1);
       }
 

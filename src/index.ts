@@ -35,6 +35,17 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
     publicApiSymbols = discoverPublicApiSurface(program, checker, entryPoints);
   });
 
+  if (verbose) {
+    const sorted = [...publicApiSymbols]
+      .map(s => s.getName())
+      .sort((a, b) => a.localeCompare(b));
+    console.log(`\nPublic API symbols (${sorted.length}):`);
+    for (const name of sorted) {
+      console.log(`  ${name}`);
+    }
+    console.log('');
+  }
+
   // 3. Classify symbols
   let classification!: ReturnType<typeof classifySymbols>;
   time('classify symbols', () => {

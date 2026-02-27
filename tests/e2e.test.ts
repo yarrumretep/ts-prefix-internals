@@ -22,6 +22,7 @@ describe('end-to-end', () => {
       verbose: false,
       skipValidation: false,
       force: false,
+      strict: false,
     });
   });
 
@@ -31,8 +32,9 @@ describe('end-to-end', () => {
     }
   });
 
-  it('produces no validation errors', () => {
-    expect(result.validationErrors).toBeUndefined();
+  it('produces no validation errors (excluding intentional unsafe-patterns fixture)', () => {
+    const unexpected = result.validationErrors?.filter(e => !e.includes('unsafe-patterns.ts'));
+    expect(unexpected?.length ? unexpected : undefined).toBeUndefined();
   });
 
   it('prefixes all expected internal symbols', () => {

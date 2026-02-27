@@ -66,6 +66,25 @@ describe('parseArgs', () => {
     expect(config.force).toBe(true);
   });
 
+  it('parses --strict flag', () => {
+    const config = parseArgs([
+      '-p', 'tsconfig.json',
+      '-e', 'src/index.ts',
+      '-o', 'dist',
+      '--strict',
+    ]);
+    expect(config.strict).toBe(true);
+  });
+
+  it('defaults strict to false', () => {
+    const config = parseArgs([
+      '-p', 'tsconfig.json',
+      '-e', 'src/index.ts',
+      '-o', 'dist',
+    ]);
+    expect(config.strict).toBe(false);
+  });
+
   it('throws on missing required args', () => {
     expect(() => parseArgs([])).toThrow();
     expect(() => parseArgs(['-p', 'tsconfig.json'])).toThrow();

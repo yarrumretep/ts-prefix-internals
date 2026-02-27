@@ -9,6 +9,7 @@ export interface PrefixConfig {
   verbose: boolean;
   skipValidation: boolean;
   force: boolean;
+  strict: boolean;
 }
 
 export const DEFAULT_PREFIX = '_';
@@ -22,6 +23,7 @@ export function parseArgs(args: string[]): PrefixConfig {
   let verbose = false;
   let skipValidation = false;
   let force = false;
+  let strict = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -39,6 +41,7 @@ Options:
       --verbose             Print every rename decision with reasoning
       --skip-validation     Skip post-rename type-check
       --force               Continue despite dynamic-access errors (exit 0)
+      --strict              Treat warnings as errors (fail on unsafe patterns)
   -h, --help                Show this help message
 
 Example:
@@ -71,6 +74,9 @@ Example:
       case '--force':
         force = true;
         break;
+      case '--strict':
+        strict = true;
+        break;
       default:
         if (arg.startsWith('-')) {
           throw new Error(`Unknown option: ${arg}`);
@@ -91,6 +97,7 @@ Example:
     verbose,
     skipValidation,
     force,
+    strict,
   };
 }
 

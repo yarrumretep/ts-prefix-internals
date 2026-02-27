@@ -480,9 +480,121 @@ export function classifySymbols(
     return [];
   }
 
+  // Unsafe pattern detection — runs AFTER classification alongside dynamic access detection
+  function detectUnsafePatterns(sf: ts.SourceFile): void {
+
+    // Resolve the source type for an ObjectBindingPattern.
+    function getDestructuringSourceType(pattern: ts.ObjectBindingPattern): ts.Type | undefined {
+      const container = pattern.parent;
+      if (ts.isParameter(container)) {
+        if (container.type) return checker.getTypeFromTypeNode(container.type);
+        const sym = container.name ? checker.getSymbolAtLocation(container.name) : undefined;
+        return sym ? checker.getTypeOfSymbolAtLocation(sym, container) : undefined;
+      }
+      if (ts.isVariableDeclaration(container) && container.initializer) {
+        return checker.getTypeAtLocation(container.initializer);
+      }
+      return undefined;
+    }
+
+    // Check an ObjectBindingPattern for untracked property name collisions.
+    function checkDestructuring(pattern: ts.ObjectBindingPattern): void {
+      const sourceType = getDestructuringSourceType(pattern);
+      if (!sourceType) return;
+
+      const container = pattern.parent;
+      const isParam = ts.isParameter(container);
+      const hitProps: string[] = [];
+      let hasDefault = false;
+
+      for (const element of pattern.elements) {
+        if (ts.isOmittedExpression(element)) continue;
+
+        const propName = element.propertyName && ts.isIdentifier(element.propertyName)
+          ? element.propertyName.text
+          : ts.isIdentifier(element.name) ? element.name.text : undefined;
+
+        if (!propName || !renamedNames.has(propName)) continue;
+
+        const prop = sourceType.getProperty(propName);
+        if (!prop) continue;
+
+        // If the property symbol is directly tracked, the renamer handles it
+        if (symbolsToRename.has(prop)) continue;
+
+        // Skip non-project properties (lib, node_modules)
+        const propDecls = prop.getDeclarations();
+        const isProject = propDecls?.some(d => {
+          const dsf = d.getSourceFile();
+          return !dsf.isDeclarationFile && !dsf.fileName.includes('node_modules');
+        }) ?? false;
+        if (!isProject) continue;
+
+        // Skip public API properties
+        if (isPublicSymbol(prop)) continue;
+
+        hitProps.push(propName);
+        if (element.initializer) hasDefault = true;
+      }
+
+      if (hitProps.length === 0) return;
+
+      const { line } = sf.getLineAndCharacterOfPosition(pattern.getStart());
+      const shortFile = sf.fileName.replace(/.*[/\\]/, '');
+      const names = hitProps.join("', '");
+
+      if (isParam && hasDefault) {
+        diagnostics.push({
+          level: 'warn',
+          message: `Destructured parameter with default at ${shortFile}:${line + 1} — property '${names}' matches renamed symbol(s) but binding name won't be renamed; use explicit property access (e.g. fields.${hitProps[0]} ?? default)`,
+          file: sf.fileName,
+          line: line + 1,
+        });
+      } else {
+        diagnostics.push({
+          level: 'warn',
+          message: `Destructured binding at ${shortFile}:${line + 1} — property '${names}' matches renamed symbol(s) but binding name won't be renamed; use dot access instead`,
+          file: sf.fileName,
+          line: line + 1,
+        });
+      }
+    }
+
+    // Check computed property keys for renamed name collisions.
+    function checkComputedPropertyKey(node: ts.ComputedPropertyName): void {
+      const exprType = checker.getTypeAtLocation(node.expression);
+      const literals = collectStringLiterals(exprType);
+      const hits = literals.filter(n => renamedNames.has(n));
+
+      if (hits.length === 0) return;
+
+      const { line } = sf.getLineAndCharacterOfPosition(node.getStart());
+      const shortFile = sf.fileName.replace(/.*[/\\]/, '');
+
+      diagnostics.push({
+        level: 'warn',
+        message: `Computed property key at ${shortFile}:${line + 1} — includes renamed name(s) '${hits.join("', '")}'; string values won't be renamed at runtime. Use direct property names in object literals`,
+        file: sf.fileName,
+        line: line + 1,
+      });
+    }
+
+    function visit(node: ts.Node): void {
+      if (ts.isObjectBindingPattern(node)) {
+        checkDestructuring(node);
+      }
+      if (ts.isComputedPropertyName(node)) {
+        checkComputedPropertyKey(node);
+      }
+      ts.forEachChild(node, visit);
+    }
+    ts.forEachChild(sf, visit);
+  }
+
   for (const sf of program.getSourceFiles()) {
     if (!isProjectSourceFile(sf)) continue;
     detectDynamicAccess(sf);
+    detectUnsafePatterns(sf);
   }
 
   return { willPrefix, willNotPrefix, diagnostics, symbolsToRename };

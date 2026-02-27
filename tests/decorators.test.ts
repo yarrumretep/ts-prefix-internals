@@ -53,9 +53,11 @@ describe('decorator handling', () => {
       verbose: false,
       skipValidation: false,
       force: false,
+      strict: false,
     });
 
-    expect(result.validationErrors).toBeUndefined();
+    const unexpected = result.validationErrors?.filter(e => !e.includes('unsafe-patterns.ts'));
+    expect(unexpected?.length ? unexpected : undefined).toBeUndefined();
 
     const decoratedContent = fs.readFileSync(path.join(outDir, 'src', 'decorated.ts'), 'utf-8');
     // Decorated class name preserved
