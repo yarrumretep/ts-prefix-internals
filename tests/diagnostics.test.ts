@@ -23,11 +23,12 @@ describe('dynamic access diagnostics', () => {
     return allDiagnostics.filter(d => d.file.endsWith(fileName));
   }
 
-  describe('silent tier — array/tuple access', () => {
-    it('does NOT emit diagnostics for array index access', () => {
+  describe('silent tier — array/tuple/string-index access', () => {
+    it('does NOT emit diagnostics for array index or string-index access', () => {
       const diags = diagnosticsForFile('dynamic-access.ts');
-      // Only the warn (obj[key]) and error (g[field]) should appear; no array diagnostics
-      expect(diags).toHaveLength(2);
+      // Only the error (g[field] with literal type) should appear;
+      // array indexing is silent (array type), obj[key] is silent (string index type)
+      expect(diags).toHaveLength(1);
     });
   });
 
@@ -38,14 +39,6 @@ describe('dynamic access diagnostics', () => {
       expect(errors).toHaveLength(1);
       expect(errors[0].message).toContain('forward');
       expect(errors[0].message).toContain('reverse');
-    });
-  });
-
-  describe('warn tier — unresolvable dynamic access', () => {
-    it('emits warn for broad string key access', () => {
-      const diags = diagnosticsForFile('dynamic-access.ts');
-      const warns = diags.filter(d => d.level === 'warn');
-      expect(warns).toHaveLength(1);
     });
   });
 

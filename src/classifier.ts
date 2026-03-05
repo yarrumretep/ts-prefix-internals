@@ -421,12 +421,16 @@ export function classifySymbols(
           return;
         }
 
-        // Check if the object is an array/tuple — suppress entirely
-        const objectType = checker.getTypeAtLocation(node.expression);
+        // Check if the object is an array/tuple/index-signature/generic type — suppress entirely
+        const rawObjectType = checker.getTypeAtLocation(node.expression);
+        // Use getNonNullableType to unwrap `T | undefined` from optional chaining
+        const objectType = checker.getNonNullableType(rawObjectType);
         if (
           checker.isArrayType(objectType) ||
           checker.isTupleType(objectType) ||
-          objectType.getNumberIndexType() !== undefined
+          objectType.getNumberIndexType() !== undefined ||
+          objectType.getStringIndexType() !== undefined ||
+          isGenericType(rawObjectType)
         ) {
           ts.forEachChild(node, visit);
           return;
@@ -468,6 +472,19 @@ export function classifySymbols(
       ts.forEachChild(node, visit);
     }
     ts.forEachChild(sf, visit);
+  }
+
+  /** Check if a type is a generic/abstract type whose properties are not concrete. */
+  function isGenericType(type: ts.Type): boolean {
+    const flags = type.getFlags();
+    // Type parameters: T, K extends string, etc.
+    if (flags & ts.TypeFlags.TypeParameter) return true;
+    // Conditional types: NonNullable<T>, Extract<T, U>, etc.
+    if (flags & ts.TypeFlags.Conditional) return true;
+    // Mapped types: Partial<T>, Pick<T, K>, etc.
+    const objFlags = (type as ts.ObjectType).objectFlags ?? 0;
+    if (objFlags & ts.ObjectFlags.Mapped) return true;
+    return false;
   }
 
   function collectStringLiterals(type: ts.Type): string[] {
