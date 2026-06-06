@@ -93,11 +93,14 @@ export async function prefixInternals(config: PrefixConfig): Promise<FullResult>
   const tsconfigOutPath = path.join(absoluteOutDir, 'tsconfig.json');
   fs.writeFileSync(tsconfigOutPath, tsconfigContent);
 
-  // 6. Validate output compiles
+  // 6. Validate output compiles. Build the validation program against the
+  // ORIGINAL config (so `extends` chains and path aliases resolve), with a
+  // compiler host that serves the prefixed content for renamed files —
+  // the copied tsconfig in outDir can't see files outside the output tree.
   let validationErrors: string[] | undefined;
   if (!skipValidation) {
     time('validate output', () => {
-      validationErrors = validateOutput(tsconfigOutPath);
+      validationErrors = validateOutput(projectPath, renameResult.outputFiles);
       if (validationErrors!.length === 0) {
         validationErrors = undefined;
       }
@@ -134,8 +137,36 @@ function resolveOutputPath(projectDir: string, outDir: string, sourceFileName: s
   return outputPath;
 }
 
-function validateOutput(tsconfigPath: string): string[] {
-  const program = createProgramFromConfig(tsconfigPath);
+function validateOutput(projectPath: string, outputFiles: Map<string, string>): string[] {
+  const absolutePath = path.resolve(projectPath);
+  const configFile = ts.readConfigFile(absolutePath, ts.sys.readFile);
+  if (configFile.error) {
+    return [ts.flattenDiagnosticMessageText(configFile.error.messageText, '\n')];
+  }
+  const basePath = path.dirname(absolutePath);
+  const parsed = ts.parseJsonConfigFileContent(configFile.config, ts.sys, basePath);
+  if (parsed.errors.length > 0) {
+    return parsed.errors.map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'));
+  }
+
+  const byResolvedPath = new Map<string, string>();
+  for (const [fileName, content] of outputFiles) {
+    byResolvedPath.set(path.resolve(fileName), content);
+  }
+
+  const host = ts.createCompilerHost(parsed.options);
+  const origGetSourceFile = host.getSourceFile.bind(host);
+  host.getSourceFile = (fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile) => {
+    const replaced = byResolvedPath.get(path.resolve(fileName));
+    if (replaced !== undefined) {
+      return ts.createSourceFile(fileName, replaced, languageVersionOrOptions, true);
+    }
+    return origGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile);
+  };
+  const origReadFile = host.readFile.bind(host);
+  host.readFile = (fileName) => byResolvedPath.get(path.resolve(fileName)) ?? origReadFile(fileName);
+
+  const program = ts.createProgram(parsed.fileNames, parsed.options, host);
   const diagnostics = ts.getPreEmitDiagnostics(program);
   return diagnostics.map(d => {
     const msg = ts.flattenDiagnosticMessageText(d.messageText, '\n');
