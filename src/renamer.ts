@@ -117,7 +117,11 @@ export function computeRenames(
   const editedPositions = new Set<string>();
 
   // Helper: rename all declarations of a property symbol that haven't been
-  // edited yet (e.g. inline anonymous type literals)
+  // edited yet (e.g. inline anonymous type literals). Covers properties
+  // declared in object literal EXPRESSIONS too (PropertyAssignment,
+  // ShorthandPropertyAssignment, accessors): inference-typed literals have
+  // no contextual type, so the walk-time literal cases never see them —
+  // this helper, fired from the access-side fallback, is their only chance.
   function renamePropertyDeclarations(prop: ts.Symbol, propName: string, newName: string): void {
     if (isPublicApiSymbol(prop)) return;
     const propDecls = prop.getDeclarations();
@@ -125,7 +129,28 @@ export function computeRenames(
     for (const d of propDecls) {
       const declSf = d.getSourceFile();
       if (declSf.isDeclarationFile || declSf.fileName.includes('node_modules')) continue;
-      const declName = (ts.isPropertySignature(d) || ts.isPropertyDeclaration(d) || ts.isMethodSignature(d) || ts.isMethodDeclaration(d))
+
+      // Shorthand `{ label }` must expand to `{ _label: label }` — renaming
+      // the key in place would also change the value reference.
+      if (ts.isShorthandPropertyAssignment(d)) {
+        const pos = d.name.getStart();
+        const key = `${declSf.fileName}:${pos}`;
+        if (!editedPositions.has(key)) {
+          const valueSym = checker.getShorthandAssignmentValueSymbol(d);
+          const valueName = (valueSym && getNewName(valueSym)) ?? d.name.text;
+          allEdits.push({
+            fileName: declSf.fileName,
+            start: pos,
+            length: propName.length,
+            newText: `${newName}: ${valueName}`,
+          });
+          editedPositions.add(key);
+        }
+        continue;
+      }
+
+      const declName = (ts.isPropertySignature(d) || ts.isPropertyDeclaration(d) || ts.isMethodSignature(d) || ts.isMethodDeclaration(d) ||
+                        ts.isPropertyAssignment(d) || ts.isGetAccessorDeclaration(d) || ts.isSetAccessorDeclaration(d))
         ? d.name
         : undefined;
       if (declName && ts.isIdentifier(declName)) {
